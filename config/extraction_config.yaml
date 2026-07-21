@@ -1,0 +1,62 @@
+# PDF -> images -> VLM full-page OCR -> plain text
+# Hardware target: RTX 4070 Super 12GB
+
+hardware:
+  gpu: "RTX 4070 Super"
+  vram_gb: 12
+
+# Default: local GLM-4.6V-Flash (9B) in 4-bit
+active_backend: "local"
+
+backends:
+  local:
+    # GLM-4.6V-Flash (9B) from zai-org/GLM-V
+    model_name: "zai-org/GLM-4.6V-Flash"
+    load_in_4bit: true
+    # Pixel budget applied before inference to protect VRAM
+    max_pixels: 1003520
+    min_pixels: 200704
+    # Full-page OCR needs longer output
+    max_new_tokens: 4096
+    temperature: 0.1
+
+  # Optional fallback to previous 4.1V baseline
+  local_41_base:
+    model_name: "zai-org/GLM-4.1V-9B-Base"
+    load_in_4bit: true
+    max_pixels: 1003520
+    min_pixels: 200704
+    max_new_tokens: 4096
+    temperature: 0.1
+
+  # Optional reasoning-focused GLM 4.1V; may be slower / tighter on VRAM
+  local_thinking:
+    model_name: "zai-org/GLM-4.1V-9B-Thinking"
+    load_in_4bit: true
+    max_pixels: 802816
+    min_pixels: 200704
+    max_new_tokens: 4096
+    temperature: 0.1
+
+paths:
+  sources_dir: "data/sources"
+  pages_dir: "data/pdf_pages"
+  output_dir: "output"
+  # {source} = PDF stem / images folder name
+  ocr_file: "output/{source}.txt"
+  tex_file: "output/{source}.tex"
+  draft_file: "output/draft.jsonl"
+  rejected_file: "data/rejected.jsonl"
+  train_file: "data/train.jsonl"
+
+pdf:
+  dpi: 200
+  image_format: "png"
+
+extraction:
+  # full_page: OCR entire page content as plain text
+  mode: "full_page"
+  append: true
+  # Default: Traditional Chinese
+  # Use --lang en only when the PDF itself is English.
+  source_lang: "zh"

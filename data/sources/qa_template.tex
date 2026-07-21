@@ -1,0 +1,68 @@
+% AIbuliding 訓練資料草稿格式（給人工寫解答用）
+% 用法：複製本檔 → 依題填寫 → 交給 agent 轉成 JSONL
+% 規則：先寫進 data/draft.jsonl；審過再 promote 到 data/train.jsonl
+%
+% 標記說明（請保持關鍵字一致，方便之後自動匯入）：
+%   \qa{id}{...}     一題一塊
+%   \question{...}   題目（user）
+%   \solution{...}   逐步解答（assistant）
+%   解答內請用：Step 1： / Step 2： / **答案：** / **常見錯誤：** 或 **注意：**
+%
+% 有圖的題：把圖中條件寫進 \question{}，例如：
+%   [圖] 長方形 $ABCD$，其中 $AB=6$，$AD=4$，對角線交於 $O$。
+
+\documentclass{article}
+\usepackage{amsmath,amssymb}
+\usepackage[utf8]{inputenc}
+\begin{document}
+
+% ========== 題目 1 ==========
+\qa{2015p1_q01}{
+\question{
+化簡 $\dfrac{m^{9}}{(m^{3}n^{7})^{5}}$，並以正指數表示答案。
+}
+\solution{
+Step 1：先處理括號內的指數。
+
+$$\left(m^{3}n^{7}\right)^{5}=m^{15}n^{35}$$
+
+Step 2：相除時同底數指數相減：
+
+$$\dfrac{m^{9}}{m^{15}n^{35}}=m^{9-15}n^{-35}=m^{-6}n^{-35}$$
+
+Step 3：改寫成正指數：
+
+$$\dfrac{1}{m^{6}n^{35}}$$
+
+**答案：** $\dfrac{1}{m^{6}n^{35}}$
+
+**常見錯誤：** 忘記外層指數同時作用在 $m$ 與 $n$。
+}
+}
+
+% ========== 題目 2（有圖示例）==========
+\qa{2015p1_q08}{
+\question{
+在圖中，長方形 $ABCD$ 中，$AB=6$，$AD=4$，對角線 $AC$ 與 $BD$ 交於 $O$。
+求 $AO$ 的長度。
+
+[圖] 長方形 $ABCD$，$AB=6$，$AD=4$，對角線交於 $O$。
+}
+\solution{
+Step 1：長方形對角線相等且互相平分，故 $O$ 為 $AC$ 中點。
+
+Step 2：由畢氏定理，
+
+$$AC=\sqrt{AB^{2}+AD^{2}}=\sqrt{6^{2}+4^{2}}=\sqrt{52}=2\sqrt{13}$$
+
+Step 3：因此
+
+$$AO=\dfrac{1}{2}AC=\sqrt{13}$$
+
+**答案：** $\sqrt{13}$
+
+**注意：** 長方形對角線互相平分，不一定互相垂直。
+}
+}
+
+\end{document}
