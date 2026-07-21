@@ -1,4 +1,4 @@
-"""Stage 3: stitch draft + GLM polish -> .txt / .tex."""
+"""Stage 3: stitch draft + VLM polish -> .txt / .tex."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ class DraftAssembler:
 class FinalPolisher:
     """
     Arrange stage:
-      draft -> GLM polish with forced LaTeX math -> .txt + .tex
+      draft -> VLM polish with forced LaTeX math -> .txt + .tex
     """
 
     def __init__(self, vlm):
@@ -57,7 +57,7 @@ class FinalPolisher:
 
         return (
             (raw.strip() or draft_fallback.strip()),
-            self._wrap_tex(draft_fallback),
+            self.wrap_tex(draft_fallback),
             "polish parse fail; draft wrapped",
         )
 
@@ -81,7 +81,7 @@ class FinalPolisher:
         return None
 
     @staticmethod
-    def _wrap_tex(body: str) -> str:
+    def wrap_tex(body: str) -> str:
         return (
             "\\documentclass[12pt]{ctexart}\n"
             "\\usepackage{amsmath,amssymb,booktabs}\n"

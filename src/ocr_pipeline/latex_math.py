@@ -210,11 +210,18 @@ def _sanitize_tabular(chunk: str) -> str:
 
 
 def _mark_unpaired_dollars(tex: str) -> str:
-    """Fail-open: odd count of single-$ → comment; do not invent closing $."""
+    """Fail-open: odd count of single-$ → comment inside document; do not invent pairs."""
     without_display = re.sub(r"\$\$.*?\$\$", "", tex, flags=re.DOTALL)
-    if without_display.count("$") % 2 == 1:
-        return tex.rstrip() + "\n% TODO: verify unpaired $\n"
-    return tex
+    if without_display.count("$") % 2 != 1:
+        return tex
+    note = "% TODO: verify unpaired dollar"
+    if note in tex:
+        return tex
+    # Keep comment inside the document so extract_tex_body / per-page merge retains it
+    m = re.search(r"\\end\{document\}", tex, flags=re.IGNORECASE)
+    if m:
+        return tex[: m.start()] + note + "\n" + tex[m.start() :]
+    return tex.rstrip() + "\n" + note + "\n"
 
 
 def sanitize_tex_document(tex: str) -> str:

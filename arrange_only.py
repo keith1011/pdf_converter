@@ -60,7 +60,7 @@ def main() -> None:
         if tex_out.exists():
             tex = sanitize_tex_document(tex_out.read_text(encoding="utf-8"))
         else:
-            tex = FinalPolisher._wrap_tex(draft)
+            tex = FinalPolisher.wrap_tex(draft)
             tex = sanitize_tex_document(tex)
             warns.add("no existing .tex; wrapped draft then sanitized")
         txt_out.write_text(strip_model_junk(draft), encoding="utf-8")
@@ -71,8 +71,6 @@ def main() -> None:
     cfg = load_ocr_config(ROOT / "config" / "ocr_pipeline.yaml")
     vlm = build_vlm_client(cfg)
     polisher = FinalPolisher(vlm)
-    backend = str((cfg.get("vlm") or {}).get("backend", "qwen"))
-    print(f"=== Stage3 arrange only ({backend}) ===")
     print_stage3_start()
     txt, tex, pw = polisher.polish(draft)
     for w in pw:

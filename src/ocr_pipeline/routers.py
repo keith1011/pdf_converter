@@ -25,11 +25,11 @@ def normalize_display_math(text: str) -> str:
 
 
 class MathRouter:
-    """Formula/Equation -> MinerU/UniMERNet (fallback: GLM). Always LaTeX $$...$$."""
+    """Formula/Equation -> MinerU/UniMERNet when available; else VlmClient. Body display $$."""
 
     def __init__(self, engine: str = "mineru", glm_fallback=None):
         self.engine = engine
-        self.glm_fallback = glm_fallback
+        self.glm_fallback = glm_fallback  # VlmClient (name kept for call-site compat)
         self._ready = False
 
     def _try_init_mineru(self) -> bool:
@@ -48,14 +48,14 @@ class MathRouter:
                     continue
         except Exception:
             pass
-        print("[MathRouter] MinerU/UniMERNet not found; will use GLM fallback for formulas")
+        print("[MathRouter] MinerU/UniMERNet not found; will use VLM fallback for formulas")
         return False
 
     def extract_latex(self, crop_path: Path) -> str:
         self._try_init_mineru()
         # TODO: wire concrete MinerU formula OCR when installed
         if self.glm_fallback is None:
-            raise RuntimeError("No formula engine available (MinerU missing and no GLM fallback)")
+            raise RuntimeError("No formula engine available (MinerU missing and no VLM fallback)")
         raw = self.glm_fallback.generate(MATH_ROUTER_PROMPT, image_path=crop_path)
         return normalize_display_math(raw)
 
@@ -67,9 +67,9 @@ class MathRouter:
 
 
 class TextRouter:
-    """Text/Title/List/Table crops -> GLM-4.6V-Flash (formulas forced to LaTeX)."""
+    """Text/Title/List/Table crops -> VlmClient (formulas forced to LaTeX)."""
 
-    def __init__(self, vlm, model_name: str = "GLM-4.6V-Flash"):
+    def __init__(self, vlm, model_name: str = "VlmClient"):
         self.vlm = vlm
         self.model_name = model_name
 

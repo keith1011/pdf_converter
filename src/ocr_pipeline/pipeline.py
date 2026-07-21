@@ -90,8 +90,8 @@ class PipelineManager:
         if polish_per_page:
             txt_parts: list[str] = []
             body_parts: list[str] = []
+            print_stage3_start()  # DR2: once, then quiet across pages
             for pr in pages:
-                print_stage3_start()
                 t, x, pw = self.polisher.polish(pr.draft)
                 for w in pw:
                     warns.add(w)
@@ -100,7 +100,7 @@ class PipelineManager:
                 body_parts.append(self.polisher.extract_tex_body(x))
             full_txt = "\n\n".join(txt_parts)
             full_tex = sanitize_tex_document(
-                self.polisher._wrap_tex("\n\n".join(body_parts))
+                self.polisher.wrap_tex("\n\n".join(body_parts))
             )
             draft = "\n\n".join(p.draft for p in pages)
         else:

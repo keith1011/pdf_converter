@@ -1,5 +1,11 @@
 # Progress Log
 
+## Session: 2026-07-21 — TDD review fixes
+- RED→GREEN: wrap_tex public, DR2 Stage3 once, unpaired TODO inside doc (no `$` in comment), VLM labels, quieter arrange_only
+- Standalone repo in `pdf scaner/` as **pdf_converter**
+- Commit `76275bc` on `main`
+- Push blocked: need `gh auth login` then `gh repo create pdf_converter ... --push`
+
 ## Session: 2026-07-21 — Phase 2.5a COMPLETE
 
 ### Golden (final)

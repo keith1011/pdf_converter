@@ -72,4 +72,4 @@
 | 無 `.warn.log` | Design D12-B |
 
 ## Next Action
-Phase 2.5a 完成。最近一次 run exit 0；tabular `{…\\…}` 已加 sanitizer。
+手動 run：`run_ocr_pipeline.py … --limit 2`（進行中）

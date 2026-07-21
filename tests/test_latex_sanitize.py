@@ -62,7 +62,7 @@ def test_body_display_math_kept():
 def test_unpaired_dollar_fail_open():
     src = r"price is $5 only"
     out = sanitize_tex_document(src)
-    assert "% TODO: verify unpaired $" in out
+    assert "% TODO: verify unpaired dollar" in out
 
 
 def test_tabular_brace_with_rowbreak_flattened():

@@ -36,7 +36,13 @@ PDF → compile-friendly `.tex` draft → ≤10 min teacher edit → xelatex. Co
 | check-compile / Approach B / LayoutArtifact | P2 after golden |
 | MinerU | P3 after golden + evidence |
 
-## Golden success (2026-07-21)
+## TDD review fixes (2026-07-21)
+- Public `FinalPolisher.wrap_tex`
+- DR2: `print_stage3_start` once for polish_per_page
+- Unpaired TODO inside document; wording without `$` (avoids math regex)
+- MathRouter/TextRouter copy: VLM not GLM
+- arrange_only: no backend banner; DR1 exit only
+- Deferred larger smells: merge Qwen/GLM client duplication, split LayoutAnalyzer
 - Pipeline OK after VRAM release ordering
 - Auto-extract TeX from markdown fences
 - ~1 min human edit (unbalanced `{` in marks remarks) → `output/123.pdf`
