@@ -2,29 +2,55 @@
 
 ## OCR / LaTeX
 
-### CLI `--check-compile` (deferred from Phase 1)
+### CLI `--check-compile` (Ship 1.5 — deferred from Ship 1)
 
 **What:** Add optional `--check-compile` to `run_ocr_pipeline.py` and `arrange_only.py` that runs `latexmk -xelatex` or `xelatex` in the `.tex` output directory, writes a sibling `.log`, and never deletes the draft on failure.
 
-**Why:** Manual compile works, but an opt-in draft gate catches broken delimiters/tables before the teacher edit loop wastes time.
+**Why:** Manual compile still works; an opt-in draft gate catches broken delimiters before the teacher edit loop wastes time. Eng review **15B** removed PDF from Ship 1 success — this remains the path to restore compile as Ship 1.5.
 
-**Context:** `/plan-eng-review` Issue 3 chose document-only for Phase 1 (no CLI flag). Design doc still lists compile gate as desirable. Implement after `sanitize_tex_document` lands and golden page is stable. Prefer shared helper under `src/ocr_pipeline/compile_check.py`; `chdir` to output dir to avoid scattering `.aux` in repo root.
+**Context:** `/plan-eng-review` (2026-07-21 content-first) decision **D14/15B**: no compile in Ship 1. Still desired as **P1 Ship 1.5**. Prefer shared helper under `src/ocr_pipeline/compile_check.py`; `chdir` to output dir to avoid scattering `.aux` in repo root. See also new item **LaTeX auto-compile PDF (Ship 1.5)**.
 
-**Effort:** M
-**Priority:** P2
-**Depends on:** Phase 1 sanitizer + per-page polish fix
+**Effort:** M  
+**Priority:** P1  
+**Depends on:** Ship 1 content-first path green (`.tex`/`.txt`/`.pageir.json`)
 
 ### Approach B — LayoutBlock → marking-scheme templates
 
-**What:** Emit stable blocks into fixed LaTeX templates (marking-scheme `tabular` + question stem), with `% TODO: verify` near formula-in-table / low-confidence regions. Extend existing `LayoutBlock`; do not invent a parallel schema.
+**Status:** SUPERSEDED (2026-07-21) — do not implement as Ship 1 success path.
 
-**Why:** Sanitizer cannot fix wrong column counts or merged cells; teachers need predictable structure for reuse/edit.
+**What:** _(Historical)_ Emit stable blocks into fixed LaTeX templates (marking-scheme `tabular` + question stem).
 
-**Context:** Approved design (Approach A now / B later). Entry criteria: 3 consecutive checklist pages (marks column, ≥3 formulas, ≥1 table row) with ≤10 min edit + clean compile, OR same page 3× stable under `arrange_only --no-vlm`. Start from `src/ocr_pipeline/models.py` `LayoutBlock` and Stage2 router labels.
+**Why superseded:** Product bar moved to **content-first** (complete formulas + linear TeX). Layout fidelity (解|分|備註 columns) is no longer pass/fail. See design `~/.gstack/projects/pdf-scaner/a1217-main-design-20260721-153800.md` and eng plan `a1217-main-eng-review-plan-20260721-content-first.md`.
 
-**Effort:** L
-**Priority:** P2
-**Depends on:** Phase 1 entry criteria met
+**Context:** Replaced by minimal Approach B: PageIR + segmenter + formula_integrity + linear render. Old tabular eng plan `a1217-main-eng-review-plan-20260721.md` is historical only.
+
+**Effort:** —  
+**Priority:** —  
+**Depends on:** —
+
+### LaTeX auto-compile PDF (Ship 1.5)
+
+**What:** After Ship 1 linear `.tex` is stable, produce `output/<stem>.pdf` via `latexmk -xelatex` (or `xelatex`), wired to optional `--check-compile` / golden helper. Golden may require PDF; interactive keeps `.tex` on compile fail with WARN.
+
+**Why:** Teachers still want a quick PDF preview; eng review deferred it so content integrity is not blocked on TeX toolchain flakiness.
+
+**Context:** Design premise originally listed PDF in Ship 1; eng-review amendment **15B** moves it to Ship 1.5. Pairs with `--check-compile` TODO above.
+
+**Effort:** M  
+**Priority:** P1  
+**Depends on:** Ship 1 content-first artifacts; `--check-compile` helper
+
+### OCR overlay PDF (Ship 2)
+
+**What:** Render `output/<stem>.ocr_overlay.pdf` — original page image plus OCR text tied to segment `bbox` / `source_block_id`. Replace Ship 1 synthetic page-level ids/bboxes with real LayoutBlock spatial reattach.
+
+**Why:** Proves *where* each OCR string came from; was explicitly staged after content correctness.
+
+**Context:** Design Ship 2; eng decisions overlay=TODO, 6A synthetic ids only in Ship 1. Taste (side panel vs translucent) decided in Ship 2 ticket.
+
+**Effort:** L  
+**Priority:** P2  
+**Depends on:** Ship 1 PageIR always written; spatial reattach beyond `p{N}_stitched`
 
 ### Real MinerU / UniMERNet math path
 
@@ -32,11 +58,11 @@
 
 **Why:** Independent formula crops may OCR more accurately than VLM-only when marking schemes are formula-heavy.
 
-**Context:** Architecture review (2026-07-21): do **not** elevate MinerU ahead of TexSanitize + Qwen default. Stub today is import-only. Revisit only if golden edit time is still dominated by wrong formula *bodies* (not delimiters/tables). Prefer MathEngine adapter with two implementations (MinerU + VlmFallback).
+**Context:** Architecture review (2026-07-21): do **not** elevate MinerU ahead of content-first IR + integrity. Revisit only if golden edit time is still dominated by wrong formula *bodies*. Prefer MathEngine adapter (MinerU + VlmFallback). _(After content-first Ship 1.)_
 
-**Effort:** L
-**Priority:** P3
-**Depends on:** Phase 2.5a golden stable; VlmClient seam landed
+**Effort:** L  
+**Priority:** P3  
+**Depends on:** Ship 1 content-first green; VlmClient seam landed
 
 ### VlmClient seam + Qwen2.5-VL-7B 4bit default
 
@@ -52,12 +78,14 @@
 
 **Why:** Makes Surya→route→polish phases real; saves VRAM/time on iteration.
 
-**Context:** Architecture C3. Eng plan T8. Mirror `arrange_only.py` pattern.
+**Context:** Architecture C3. Mirror `arrange_only.py` pattern. _(Useful after content-first; not a Ship 1 gate.)_
 
-**Effort:** M
-**Priority:** P2
-**Depends on:** Phase 2.5a sanitize + VlmClient stable enough to iterate
+**Effort:** M  
+**Priority:** P2  
+**Depends on:** Content-first path iterable; VlmClient stable enough
 
 ## Completed
 
-_(none yet)_
+### Approach B tabular templates (as Ship 1 bar)
+
+**Status:** Completed as superseded decision (2026-07-21 eng-review) — tracked under OCR section as SUPERSEDED with pointer to content-first design. No code delivery required for the old tabular success metric.

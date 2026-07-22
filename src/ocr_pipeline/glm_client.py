@@ -143,4 +143,8 @@ class Glm46VFlashClient:
 
             text = re.sub(r"^```(?:\w+)?\s*", "", text)
             text = re.sub(r"\s*```$", "", text)
-        return text.strip()
+        text = text.strip()
+        del inputs, generated, trimmed
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return text

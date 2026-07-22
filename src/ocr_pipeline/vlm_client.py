@@ -155,7 +155,11 @@ class Qwen25VlClient:
         out = self.processor.batch_decode(
             trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
-        return _strip_fences(out[0] if out else "")
+        text = _strip_fences(out[0] if out else "")
+        del inputs, generated, trimmed
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return text
 
 
 def build_vlm_client(cfg: dict | None = None) -> VlmClient:

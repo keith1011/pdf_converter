@@ -36,7 +36,10 @@ PDF → compile-friendly `.tex` draft → ≤10 min teacher edit → xelatex. Co
 | check-compile / Approach B / LayoutArtifact | P2 after golden |
 | MinerU | P3 after golden + evidence |
 
-## TDD review fixes (2026-07-21)
+## Full-run OOM (2026-07-21)
+- 14-page single Stage3 → OOM; fixed with auto polish_per_page + empty_cache
+- Retry EXIT 0; PDF ~114KB (content still needs teacher edit for braces/math)
+- Preamble now includes `longtable,array`; sanitize injects if missing; longtable gets same cell sanitize as tabular
 - Public `FinalPolisher.wrap_tex`
 - DR2: `print_stage3_start` once for polish_per_page
 - Unpaired TODO inside document; wording without `$` (avoids math regex)

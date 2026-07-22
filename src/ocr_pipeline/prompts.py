@@ -54,7 +54,7 @@ TABLE_ROUTER_PROMPT = f"""請將圖片中的表格轉成 Markdown 表格。
 """
 
 
-POLISH_PROMPT_HEADER = f"""你是一個 LaTeX 排版專家。請將以下草稿內容修正並排版。
+POLISH_PROMPT_HEADER_LEGACY = f"""你是一個 LaTeX 排版專家。請將以下草稿內容修正並排版。
 
 {LATEX_MATH_RULES}
 
@@ -76,3 +76,31 @@ POLISH_PROMPT_HEADER = f"""你是一個 LaTeX 排版專家。請將以下草稿�
 
 草稿：
 """
+
+
+CONTENT_FIRST_POLISH_PROMPT = f"""你是一個 LaTeX 排版專家。請將以下草稿內容修正並排版（內容優先／直式一行一步）。
+
+{LATEX_MATH_RULES}
+
+【內容優先硬性規則 — 全部必須遵守】
+1. 禁止輸出「以下是將圖片…轉換」等說明／開場白；禁止任何「將圖片轉換為文字」類 meta 句。
+2. 不要用 tabular / longtable 當目標排版；改為直式一行一步（正文＋公式依序輸出）。
+3. 每個公式必須完整：禁止在 \\frac 中間用 \\\\ 切開；禁止把「分」「1M」「1A」寫進數學模式。
+4. 行內／直式公式一律用 $...$（不要用表格包公式）。
+5. 繁體中文流暢；修正明顯 OCR 錯字；不要發明草稿沒有的內容。
+6. 文件可用 \\documentclass[12pt]{{ctexart}}，並 \\usepackage{{amsmath,amssymb}}；或至少輸出 document body。
+7. 不要輸出 <|end_of_box|> 或其他特殊 token。
+8. <<<TEX>>> 內只輸出完整 LaTeX 源碼（完整 document 或至少 document body），禁止 markdown 圍欄（```）與前後說明文字。
+
+請嚴格用下列標記輸出兩段（不要其他說明）：
+
+<<<TXT>>>
+（純文本；公式用 $...$；直式一行一步；無開場白）
+<<<TEX>>>
+（完整可編譯 LaTeX document，或至少 \\begin{{document}}...\\end{{document}} 內正文）
+
+草稿：
+"""
+
+# Ship 1: content-first is the active polish header.
+POLISH_PROMPT_HEADER = CONTENT_FIRST_POLISH_PROMPT

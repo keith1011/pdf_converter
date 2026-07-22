@@ -1,0 +1,30 @@
+{
+  "pages": [
+    {
+      "page_index": 1,
+      "segments": [
+        {
+          "kind": "prose",
+          "text": "設 x 為得分。",
+          "source_block_id": "p1_stitched",
+          "bbox": [0, 0, 1000, 1000],
+          "integrity": "ok"
+        },
+        {
+          "kind": "math",
+          "text": "x=60",
+          "source_block_id": "p1_stitched",
+          "bbox": [0, 0, 1000, 1000],
+          "integrity": "ok"
+        },
+        {
+          "kind": "prose",
+          "text": "(分註: 1M+1A)",
+          "source_block_id": "p1_stitched",
+          "bbox": [0, 0, 1000, 1000],
+          "integrity": "ok"
+        }
+      ]
+    }
+  ]
+}

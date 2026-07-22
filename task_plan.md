@@ -72,4 +72,4 @@
 | 無 `.warn.log` | Design D12-B |
 
 ## Next Action
-手動 run：`run_ocr_pipeline.py … --limit 2`（進行中）
+全卷 OCR 已過（auto per-page）。`latexmk` 仍有內容級錯誤（括號／數學），屬 ≤10m 手改範圍；OOM／longtable preamble 已修。

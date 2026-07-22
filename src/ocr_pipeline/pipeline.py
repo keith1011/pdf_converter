@@ -7,10 +7,30 @@ from pathlib import Path
 
 from .assemble import DraftAssembler, FinalPolisher
 from .cli_report import WarnCollector, print_stage3_start
+from .content_first import finalize_content_first
 from .latex_math import sanitize_tex_document
 from .layout import LayoutAnalyzer
-from .models import PageResult, PipelineResult
+from .models import BBox, PageResult, PipelineResult
 from .routers import DynamicRouter
+
+# Auto per-page polish thresholds (12GB VRAM — full-doc Stage3 OOMs on long drafts)
+_AUTO_PER_PAGE_MIN_PAGES = 3
+_AUTO_PER_PAGE_MIN_CHARS = 12_000
+
+
+def decide_polish_per_page(
+    *,
+    page_count: int,
+    draft_chars: int,
+    requested: bool,
+) -> bool:
+    """
+    Content-first Stage3 always polishes each page independently.
+
+    This guarantees that every PageResult receives the polished txt/tex used
+    to build PageIR. The arguments remain for CLI/API compatibility.
+    """
+    return True
 
 
 class PipelineManager:
@@ -87,31 +107,61 @@ class PipelineManager:
         txt_path = self.output_dir / f"{source}.txt"
         tex_path = self.output_dir / f"{source}.tex"
 
-        if polish_per_page:
-            txt_parts: list[str] = []
-            body_parts: list[str] = []
-            print_stage3_start()  # DR2: once, then quiet across pages
-            for pr in pages:
-                t, x, pw = self.polisher.polish(pr.draft)
-                for w in pw:
-                    warns.add(w)
-                pr.txt, pr.tex = t, x
-                txt_parts.append(t)
-                body_parts.append(self.polisher.extract_tex_body(x))
-            full_txt = "\n\n".join(txt_parts)
-            full_tex = sanitize_tex_document(
-                self.polisher.wrap_tex("\n\n".join(body_parts))
+        combined_draft = "\n\n".join(p.draft for p in pages if p.draft.strip())
+        if (
+            not polish_per_page
+            and (
+                len(pages) >= _AUTO_PER_PAGE_MIN_PAGES
+                or len(combined_draft) >= _AUTO_PER_PAGE_MIN_CHARS
             )
-            draft = "\n\n".join(p.draft for p in pages)
-        else:
-            draft = "\n\n".join(p.draft for p in pages if p.draft.strip())
-            print_stage3_start()
-            full_txt, full_tex, pw = self.polisher.polish(draft)
+        ):
+            warns.add(
+                f"auto polish_per_page (pages={len(pages)}, draft_chars={len(combined_draft)})"
+            )
+            print(
+                f"WARN: auto polish_per_page "
+                f"(pages={len(pages)}, draft_chars={len(combined_draft)})"
+            )
+
+        txt_parts: list[str] = []
+        body_parts: list[str] = []
+        print_stage3_start()  # DR2: once, then quiet across pages
+        for pr in pages:
+            t, x, pw = self.polisher.polish(pr.draft)
             for w in pw:
                 warns.add(w)
+            pr.txt, pr.tex = t, x
+            txt_parts.append(t)
+            body_parts.append(self.polisher.extract_tex_body(x))
+        full_txt = "\n\n".join(txt_parts)
+        full_tex = sanitize_tex_document(
+            self.polisher.wrap_tex("\n\n".join(body_parts))
+        )
+        draft = "\n\n".join(p.draft for p in pages)
 
-        txt_path.write_text(full_txt, encoding="utf-8")
-        tex_path.write_text(full_tex, encoding="utf-8")
+        # Content-first Ship 1: segment → integrity → render → pageir.json
+        # Prefer polished tex body per page; txt/draft are defensive fallbacks.
+        page_drafts: list[tuple[int, str, BBox]] = []
+        for pr in pages:
+            if pr.tex:
+                text_for_seg = self.polisher.extract_tex_body(pr.tex)
+            elif pr.txt:
+                text_for_seg = pr.txt
+            else:
+                text_for_seg = pr.draft
+            page_drafts.append((pr.page, text_for_seg, BBox(0, 0, 1000, 1000)))
+
+        def _wrap(body: str) -> str:
+            return sanitize_tex_document(self.polisher.wrap_tex(body))
+
+        full_txt, full_tex, txt_path, tex_path, pageir_path, cf_warns = finalize_content_first(
+            source=source,
+            output_dir=self.output_dir,
+            page_drafts=page_drafts,
+            wrap_tex_fn=_wrap,
+        )
+        for w in cf_warns:
+            warns.add(w)
 
         return PipelineResult(
             source=source,
@@ -121,5 +171,6 @@ class PipelineManager:
             tex=full_tex,
             txt_path=txt_path,
             tex_path=tex_path,
+            pageir_path=pageir_path,
             warnings=list(warns.items),
         )

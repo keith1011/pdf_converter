@@ -75,4 +75,36 @@ class PipelineResult:
     tex: str = ""
     txt_path: Path | None = None
     tex_path: Path | None = None
+    pageir_path: Path | None = None
     warnings: list[str] = field(default_factory=list)
+
+
+class SegmentKind(str, Enum):
+    PROSE = "prose"
+    MATH = "math"
+    MARK_NOTE = "mark_note"
+
+
+class IntegrityStatus(str, Enum):
+    OK = "ok"
+    REPAIRED = "repaired"
+    FAIL = "fail"
+
+
+@dataclass
+class ContentSegment:
+    """One linear content unit for content-first Ship 1."""
+
+    kind: SegmentKind
+    text: str
+    source_block_id: str
+    bbox: BBox
+    integrity: IntegrityStatus = IntegrityStatus.OK
+
+
+@dataclass
+class PageIR:
+    """Per-page intermediate representation (ordered segments)."""
+
+    page_index: int
+    segments: list[ContentSegment] = field(default_factory=list)
