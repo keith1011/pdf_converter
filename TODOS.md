@@ -2,17 +2,18 @@
 
 ## OCR / LaTeX
 
-### CLI `--check-compile` (Ship 1.5 — deferred from Ship 1)
+### CLI `--check-compile` (Ship 1.5)
 
-**What:** Add optional `--check-compile` to `run_ocr_pipeline.py` and `arrange_only.py` that runs `latexmk -xelatex` or `xelatex` in the `.tex` output directory, writes a sibling `.log`, and never deletes the draft on failure.
+**Status:** implemented — `src/ocr_pipeline/compile_check.py`; flags on `run_ocr_pipeline.py` and `arrange_only.py`.
 
-**Why:** Manual compile still works; an opt-in draft gate catches broken delimiters before the teacher edit loop wastes time. Eng review **15B** removed PDF from Ship 1 success — this remains the path to restore compile as Ship 1.5.
+**What:** Optional `--check-compile` runs `latexmk -xelatex` (else `xelatex`) in the `.tex` output directory, writes a sibling `.log`, prints `PDF:` on success, and never deletes the draft on failure.
 
-**Context:** `/plan-eng-review` (2026-07-21 content-first) decision **D14/15B**: no compile in Ship 1. Still desired as **P1 Ship 1.5**. Prefer shared helper under `src/ocr_pipeline/compile_check.py`; `chdir` to output dir to avoid scattering `.aux` in repo root. See also new item **LaTeX auto-compile PDF (Ship 1.5)**.
+**Why:** Opt-in draft gate catches broken delimiters before the teacher edit loop wastes time.
+
+**Context:** Eng review **15B** deferred PDF from Ship 1; this restores compile as Ship 1.5. See also **LaTeX auto-compile PDF** below (same helper).
 
 **Effort:** M  
-**Priority:** P1  
-**Depends on:** Ship 1 content-first path green (`.tex`/`.txt`/`.pageir.json`)
+**Priority:** P1 (done)
 
 ### Approach B — LayoutBlock → marking-scheme templates
 
@@ -30,15 +31,14 @@
 
 ### LaTeX auto-compile PDF (Ship 1.5)
 
-**What:** After Ship 1 linear `.tex` is stable, produce `output/<stem>.pdf` via `latexmk -xelatex` (or `xelatex`), wired to optional `--check-compile` / golden helper. Golden may require PDF; interactive keeps `.tex` on compile fail with WARN.
+**Status:** implemented via `--check-compile` (same `compile_check` helper → `output/<stem>.pdf`).
+
+**What:** Produce `output/<stem>.pdf` via `latexmk -xelatex` (or `xelatex`). Golden may require PDF; interactive keeps `.tex` on compile fail with WARN.
 
 **Why:** Teachers still want a quick PDF preview; eng review deferred it so content integrity is not blocked on TeX toolchain flakiness.
 
-**Context:** Design premise originally listed PDF in Ship 1; eng-review amendment **15B** moves it to Ship 1.5. Pairs with `--check-compile` TODO above.
-
 **Effort:** M  
-**Priority:** P1  
-**Depends on:** Ship 1 content-first artifacts; `--check-compile` helper
+**Priority:** P1 (done)
 
 ### OCR overlay PDF (Ship 2)
 

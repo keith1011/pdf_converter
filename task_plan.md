@@ -68,7 +68,7 @@
 | Qwen 7B 4bit 預設 | 12GB 上 GLM-Flash 吃力；草稿夠用 |
 | Sanitize before MinerU | 可編譯工作稿 > 換公式引擎 |
 | 無 App UI；CLI DX = eng plan DR1–DR9 | Design review complete |
-| `--check-compile` defer | Eng D5-C |
+| `--check-compile` defer | Eng D5-C → **Ship 1.5 landed** (`compile_check.py`) |
 | 無 `.warn.log` | Design D12-B |
 
 ## Next Action

@@ -50,12 +50,16 @@ WARN: ...          (only if needed; one line)
 ```
 
 4. Edit the `.tex` (checklist below) <=10 minutes.
-5. Compile:
+5. Compile (manual, or opt-in gate):
 
 ```powershell
+# manual
 cd output
 latexmk -xelatex 123.tex
-# or: xelatex 123.tex
+
+# or opt-in after pipeline / arrange:
+.\.venv\Scripts\python.exe arrange_only.py output\123.txt --no-vlm --check-compile
+.\.venv\Scripts\python.exe run_ocr_pipeline.py data\sources\123.pdf --limit 1 --reuse-images --check-compile
 ```
 
 6. Optional: open page PNG under `data/pdf_pages/` beside the PDF and compare.
@@ -129,11 +133,10 @@ Still available for the older draft.jsonl flow — see older sections / `UPGRADE
 - Paths with `桌面`: open images via PIL, not broken `file://` URIs  
 - PowerShell `-c` eats `$` — put TeX samples in `.py` / test files  
 - Do not promote OCR drafts to training sets without review  
-- `--check-compile` CLI is deferred (`TODOS.md`); compile manually for now  
+- Optional `--check-compile` on `run_ocr_pipeline.py` / `arrange_only.py` (Ship 1.5): prefers `latexmk -xelatex`, else `xelatex`; writes sibling `.log`; keeps `.tex` on failure  
 
 ## Deferred (TODOS)
 
-- CLI `--check-compile`  
 - LayoutArtifact resume  
-- Approach B templates  
+- OCR overlay PDF (Ship 2)  
 - Real MinerU math path (after golden stable)  
