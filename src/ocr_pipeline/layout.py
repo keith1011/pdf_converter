@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
+import time
 from pathlib import Path
 
 from .models import BBox, BlockType, LayoutBlock
@@ -40,6 +43,66 @@ def map_surya_label(label: str | None) -> BlockType:
     return _LABEL_MAP.get(key, BlockType.OTHER)
 
 
+def _stop_surya_docker_vlms() -> list[str]:
+    """
+    Stop leftover ``surya-vllm-*`` containers.
+
+    Surya's ``VllmBackend.stop()`` only clears Python handles; Docker cleanup is
+    registered for atexit, which is too late for Stage3 in the same process.
+    """
+    if shutil.which("docker") is None:
+        return []
+    try:
+        listed = subprocess.run(
+            ["docker", "ps", "--filter", "name=surya-vllm", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except Exception:
+        return []
+    names = [line.strip() for line in (listed.stdout or "").splitlines() if line.strip()]
+    stopped: list[str] = []
+    for name in names:
+        try:
+            subprocess.run(
+                ["docker", "stop", name],
+                capture_output=True,
+                text=True,
+                timeout=90,
+                check=False,
+            )
+            stopped.append(name)
+        except Exception:
+            continue
+    return stopped
+
+
+def _wait_for_gpu_headroom(*, min_free_mib: int = 4096, timeout_s: float = 30.0) -> None:
+    """Best-effort wait after docker stop so nvidia-smi free memory recovers."""
+    if shutil.which("nvidia-smi") is None:
+        return
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        try:
+            out = subprocess.check_output(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=memory.free",
+                    "--format=csv,noheader,nounits",
+                ],
+                text=True,
+                timeout=10,
+            )
+            free = float(out.strip().splitlines()[0])
+            if free >= min_free_mib:
+                return
+        except Exception:
+            return
+        time.sleep(1.0)
+
+
 class LayoutAnalyzer:
     """PDF render + Surya layout (order included in v2; legacy ordering fallback)."""
 
@@ -48,6 +111,7 @@ class LayoutAnalyzer:
         self.device = device
         self.force_backend = (force_backend or "").strip().lower()
         self._layout_predictor = None
+        self._inference_manager = None  # Surya v2: must stop() to free Docker/vLLM VRAM
         self._backend = None  # "v2" | "legacy" | "fullpage"
 
     def pdf_to_images(self, pdf_path: Path, out_dir: Path, *, limit: int = 0) -> list[Path]:
@@ -91,11 +155,23 @@ class LayoutAnalyzer:
         ]
 
     def release(self) -> None:
-        """Free layout weights so VLM can use VRAM (12GB cards)."""
-        if self._layout_predictor is None and self._backend != "fullpage":
-            return
+        """Free layout / Surya Docker-vLLM so the VLM can use VRAM (12GB cards)."""
         print("[Layout] Releasing layout weights before VLM")
+        if self._inference_manager is not None:
+            try:
+                self._inference_manager.stop()
+                print("[Layout] Stopped SuryaInferenceManager handles")
+            except Exception as e:
+                print(f"[Layout] SuryaInferenceManager.stop failed: {e}")
+            self._inference_manager = None
         self._layout_predictor = None
+
+        # Surya atexit-only docker cleanup is too late for same-process Stage3.
+        stopped = _stop_surya_docker_vlms()
+        if stopped:
+            print(f"[Layout] Stopped docker VLM: {', '.join(stopped)}")
+            _wait_for_gpu_headroom()
+
         # Keep _backend so we know if golden used fullpage; do not re-load mid-run
         try:
             import gc
@@ -127,11 +203,13 @@ class LayoutAnalyzer:
 
             print("[Surya] Using v2 LayoutPredictor (layout + order)")
             print("[Surya] Note: v2 usually needs Docker+vLLM; will fallback if runtime fails")
-            self._layout_predictor = LayoutPredictor(SuryaInferenceManager())
+            self._inference_manager = SuryaInferenceManager()
+            self._layout_predictor = LayoutPredictor(self._inference_manager)
             self._backend = "v2"
             return
         except Exception as e:
             e_v2 = e
+            self._inference_manager = None
             print(f"[Surya] v2 unavailable ({e_v2}); trying legacy...")
 
         try:

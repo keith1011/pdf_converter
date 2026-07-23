@@ -82,3 +82,105 @@ def test_segment_linearizes_latex_layout_environments():
         (SegmentKind.MATH, "4a + 5b - 7 = 8b"),
         (SegmentKind.MATH, r"b = \frac{4a-7}{3}"),
     ]
+
+
+def test_segment_strips_dollar_wrapped_tabular_chrome():
+    """Regression: polish emits $\\begin{tabular}$/$\\hline$ → must not stay math."""
+    stitched = (
+        r"$\begin{table}[h]$"
+        "\n"
+        r"$\begin{tabular}{|c|c|c|}$$\hline$$解 & 分 & 備註 \\$$\hline$"
+        r"6. (a) 該書的售價 &$x=300$& 1M\\"
+        r"$$\hline$$\end{tabular}$"
+        "\n"
+        r"$\end{table}$"
+    )
+    page = segment_stitched_page(
+        page_index=5,
+        stitched_text=stitched,
+        page_bbox=BBox(0, 0, 10, 10),
+    )
+    joined = "\n".join(s.text for s in page.segments)
+    assert "tabular" not in joined.lower()
+    assert "hline" not in joined.lower()
+    assert r"\begin{table}" not in joined
+    assert "解" in joined
+    assert "x=300" in [s.text for s in page.segments]
+    assert any(s.kind is SegmentKind.MARK_NOTE and s.text == "1M" for s in page.segments)
+    assert all(
+        "tabular" not in s.text.lower() and "hline" not in s.text.lower()
+        for s in page.segments
+    )
+
+
+def test_segment_collapses_display_dollars_and_strips_markdown_fence():
+    stitched = (
+        "```markdown\n"
+        "解\n"
+        r"$$\frac{a}{b}=1$"
+        "\n"
+        r"$x=2$$"
+        "\n"
+        "```\n"
+    )
+    page = segment_stitched_page(
+        page_index=6,
+        stitched_text=stitched,
+        page_bbox=BBox(0, 0, 10, 10),
+    )
+    texts = [s.text for s in page.segments]
+    joined = "\n".join(texts)
+    assert "```" not in joined
+    assert "markdown" not in joined.lower()
+    assert r"\frac{a}{b}=1" in texts
+    assert "x=2" in texts
+    assert all("$$" not in s.text for s in page.segments)
+
+
+def test_segment_keeps_currency_dollar_inside_math():
+    page = segment_stitched_page(
+        page_index=7,
+        stitched_text=r"$=250(1+20\%)=\$300$",
+        page_bbox=BBox(0, 0, 10, 10),
+    )
+    assert len(page.segments) == 1
+    assert page.segments[0].kind is SegmentKind.MATH
+    assert r"\$300" in page.segments[0].text
+    assert not page.segments[0].text.startswith("$")
+
+
+def test_segment_splits_cjk_out_of_math():
+    page = segment_stitched_page(
+        page_index=8,
+        stitched_text=r"$\triangle BGE$是一直角三角形。$",
+        page_bbox=BBox(0, 0, 10, 10),
+    )
+    kinds_texts = [(s.kind, s.text) for s in page.segments]
+    assert (SegmentKind.MATH, r"\triangle BGE") in kinds_texts
+    assert any(
+        s.kind is SegmentKind.PROSE and "直角三角形" in s.text for s in page.segments
+    )
+    assert all(s.text.count("$") == 0 for s in page.segments)
+
+
+def test_segment_drops_marking_junk_frac_with_cjk():
+    page = segment_stitched_page(
+        page_index=9,
+        stitched_text=r"$\frac{正方形性質}{-}$" + "\n" + r"$\frac{-}{-}$" + "\n$x=1$\n",
+        page_bbox=BBox(0, 0, 10, 10),
+    )
+    joined = "\n".join(s.text for s in page.segments)
+    assert "正方形性質" not in joined or r"\frac" not in joined
+    assert r"\frac{-}{-}" not in joined
+    assert any(s.kind is SegmentKind.MATH and "x=1" in s.text for s in page.segments)
+
+
+def test_segment_does_not_mathify_end_document():
+    page = segment_stitched_page(
+        page_index=10,
+        stitched_text="正文\n\\end{document}\n更多\n",
+        page_bbox=BBox(0, 0, 10, 10),
+    )
+    texts = [s.text for s in page.segments]
+    assert all("end{document}" not in t for t in texts)
+    assert "正文" in texts and "更多" in texts

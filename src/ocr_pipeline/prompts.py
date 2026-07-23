@@ -44,13 +44,17 @@ TEXT_ROUTER_PROMPT = f"""請提取圖片中的全部文字，保持繁體中文�
 """
 
 
-TABLE_ROUTER_PROMPT = f"""請將圖片中的表格轉成 Markdown 表格。
+TABLE_ROUTER_PROMPT = f"""請將圖片中的「評分表／解題表」轉成直式一行一步的純文字（內容優先）。
 保持繁體中文與英文原貌。
 
 {LATEX_MATH_RULES}
 
-表格儲存格內若有公式，必須用 $...$ 包成標準 LaTeX（例如 $\\frac{{a}}{{b}}$），禁止 $$...$$，禁止 a/b 純文字分數。
-不加任何解釋。
+【內容優先硬性規則 — 全部必須遵守】
+1. 禁止 Markdown 表格（不要用 | --- |）。
+2. 禁止輸出 LaTeX tabular / longtable / \\hline / \\begin{{table}}。
+3. 依閱讀順序逐行輸出：解題步驟、公式、分數註記（如 1M、1A）各佔一行。
+4. 公式用 $...$；禁止把「分」「備註」「1M」「1A」寫進數學模式。
+5. 不加任何解釋、標題或 markdown 圍欄。
 """
 
 

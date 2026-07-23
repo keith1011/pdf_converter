@@ -23,3 +23,9 @@ def test_cjk_fen_inside_math_fails_or_flags():
     status, body, warnings = check_math_body(r"x=1分")
     assert status is IntegrityStatus.FAIL
     assert warnings
+
+
+def test_tabular_chrome_inside_math_fails():
+    status, body, warnings = check_math_body(r"\begin{tabular}{|c|c|}x=1")
+    assert status is IntegrityStatus.FAIL
+    assert any("tabular" in w.lower() for w in warnings)

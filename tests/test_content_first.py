@@ -122,3 +122,26 @@ def test_pipeline_writes_pageir_after_content_first(tmp_path: Path):
     assert math_seg["text"] == r"\frac{1}{6}"
     assert math_seg["integrity"] == "repaired"
     assert warnings
+
+
+def test_finalize_strips_tabular_chrome_from_polished_draft(tmp_path: Path):
+    from ocr_pipeline.assemble import FinalPolisher
+    from ocr_pipeline.content_first import finalize_content_first
+
+    polished_like = (
+        r"$\begin{tabular}{|c|c|c|}$$\hline$$解 & 分 & 備註 \\$$\hline$"
+        r"設 $x=60$ & 1A \\"
+        r"$$\hline$$\end{tabular}$"
+    )
+    _txt, full_tex, _tp, tex_path, _pp, _w = finalize_content_first(
+        source="tab",
+        output_dir=tmp_path,
+        page_drafts=[(1, polished_like, BBox(0, 0, 100, 100))],
+        wrap_tex_fn=FinalPolisher.wrap_tex,
+    )
+    body = tex_path.read_text(encoding="utf-8")
+    assert body == full_tex
+    assert "tabular" not in body.lower()
+    assert "hline" not in body.lower()
+    assert "$x=60$" in body
+    assert "1A" in body

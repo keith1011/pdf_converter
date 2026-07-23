@@ -32,6 +32,20 @@ def _strip_fences(text: str) -> str:
     return text.strip()
 
 
+def build_generation_kwargs(*, max_new_tokens: int, temperature: float) -> dict:
+    """
+    Always use greedy decoding for OCR/VLM.
+
+    temperature>0 previously enabled do_sample=True, which triggered a CUDA
+    device-side assert inside torch.multinomial on Qwen2.5-VL 4bit.
+    """
+    _ = temperature  # retained for config/API compatibility
+    return {
+        "max_new_tokens": max_new_tokens,
+        "do_sample": False,
+    }
+
+
 class Qwen25VlClient:
     """Qwen2.5-VL-Instruct (default 4bit) for RTX 4070 Super 12GB."""
 
@@ -41,7 +55,7 @@ class Qwen25VlClient:
         *,
         load_in_4bit: bool = True,
         max_new_tokens: int = 4096,
-        temperature: float = 0.1,
+        temperature: float = 0.0,
         max_pixels: int = 1003520,
     ):
         self.model_name = model_name
@@ -142,12 +156,10 @@ class Qwen25VlClient:
         inputs = inputs.to(self.model.device)
         inputs.pop("token_type_ids", None)
 
-        gen_kwargs: dict = {
-            "max_new_tokens": self.max_new_tokens,
-            "do_sample": self.temperature > 0,
-        }
-        if self.temperature > 0:
-            gen_kwargs["temperature"] = self.temperature
+        gen_kwargs = build_generation_kwargs(
+            max_new_tokens=self.max_new_tokens,
+            temperature=self.temperature,
+        )
 
         with torch.inference_mode():
             generated = self.model.generate(**inputs, **gen_kwargs)
@@ -181,7 +193,7 @@ def build_vlm_client(cfg: dict | None = None) -> VlmClient:
             model_name=str(src.get("model_name", "zai-org/GLM-4.6V-Flash")),
             load_in_4bit=bool(src.get("load_in_4bit", True)),
             max_new_tokens=int(src.get("max_new_tokens", 4096)),
-            temperature=float(src.get("temperature", 0.1)),
+            temperature=float(src.get("temperature", 0.0)),
             max_pixels=int(src.get("max_pixels", 1003520)),
         )
 
@@ -191,6 +203,6 @@ def build_vlm_client(cfg: dict | None = None) -> VlmClient:
         model_name=str(src.get("model_name", "Qwen/Qwen2.5-VL-7B-Instruct")),
         load_in_4bit=bool(src.get("load_in_4bit", True)),
         max_new_tokens=int(src.get("max_new_tokens", 4096)),
-        temperature=float(src.get("temperature", 0.1)),
+        temperature=float(src.get("temperature", 0.0)),
         max_pixels=int(src.get("max_pixels", 1003520)),
     )

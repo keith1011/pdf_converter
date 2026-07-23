@@ -6,6 +6,8 @@ from pathlib import Path
 
 import torch
 
+from .vlm_client import build_generation_kwargs
+
 
 class Glm46VFlashClient:
     """Thin wrapper around local zai-org/GLM-4.6V-Flash."""
@@ -16,7 +18,7 @@ class Glm46VFlashClient:
         *,
         load_in_4bit: bool = True,
         max_new_tokens: int = 4096,
-        temperature: float = 0.1,
+        temperature: float = 0.0,
         max_pixels: int = 1003520,
     ):
         self.model_name = model_name
@@ -124,12 +126,10 @@ class Glm46VFlashClient:
         inputs = inputs.to(self.model.device)
         inputs.pop("token_type_ids", None)
 
-        gen_kwargs: dict = {
-            "max_new_tokens": self.max_new_tokens,
-            "do_sample": self.temperature > 0,
-        }
-        if self.temperature > 0:
-            gen_kwargs["temperature"] = self.temperature
+        gen_kwargs = build_generation_kwargs(
+            max_new_tokens=self.max_new_tokens,
+            temperature=self.temperature,
+        )
 
         with torch.inference_mode():
             generated = self.model.generate(**inputs, **gen_kwargs)

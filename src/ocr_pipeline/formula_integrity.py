@@ -103,6 +103,14 @@ def check_math_body(body: str) -> tuple[IntegrityStatus, str, list[str]]:
         warnings.append("bare 1M/1A pattern in math body")
         fail = True
 
+    if re.search(
+        r"\\(?:begin|end)\{(?:table\*?|tabular\*?|longtable)\}|\\hline\b",
+        out,
+        flags=re.IGNORECASE,
+    ):
+        warnings.append("tabular/table chrome in math body")
+        fail = True
+
     if fail:
         return IntegrityStatus.FAIL, out, warnings
     if repaired:

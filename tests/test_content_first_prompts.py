@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from ocr_pipeline.prompts import CONTENT_FIRST_POLISH_PROMPT, LATEX_MATH_RULES
+from ocr_pipeline.prompts import (
+    CONTENT_FIRST_POLISH_PROMPT,
+    LATEX_MATH_RULES,
+    TABLE_ROUTER_PROMPT,
+)
 
 
 def test_content_first_polish_forbids_image_meta_and_tabular_as_goal():
@@ -25,3 +29,12 @@ def test_final_polisher_uses_content_first_prompt():
     from ocr_pipeline.prompts import CONTENT_FIRST_POLISH_PROMPT
 
     assert FinalPolisher.prompt_header() == CONTENT_FIRST_POLISH_PROMPT
+
+
+def test_table_router_is_linear_not_markdown_or_tabular():
+    p = TABLE_ROUTER_PROMPT
+    assert "Markdown" in p or "markdown" in p.lower()
+    assert "禁止" in p
+    assert "tabular" in p.lower()
+    assert "一行" in p or "直式" in p
+    assert "轉成 Markdown 表格" not in p

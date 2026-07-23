@@ -18,13 +18,33 @@ def render_page_ir(page: PageIR) -> tuple[str, str]:
         if seg.kind is SegmentKind.PROSE:
             lines.append(seg.text)
         elif seg.kind is SegmentKind.MATH:
-            lines.append(f"${seg.text}$")
+            body = _math_body_for_render(seg.text)
+            if body:
+                lines.append(f"${body}$")
         elif seg.kind is SegmentKind.MARK_NOTE:
             lines.append(f"(分註: {seg.text})")
         else:
             lines.append(seg.text)
     joined = "\n".join(lines)
     return joined, joined
+
+
+def _math_body_for_render(text: str) -> str:
+    """Strip bare $ from math bodies; keep \\$ currency."""
+    out: list[str] = []
+    i = 0
+    body = text.strip()
+    while i < len(body):
+        if body[i] == "\\" and i + 1 < len(body) and body[i + 1] == "$":
+            out.append("\\$")
+            i += 2
+            continue
+        if body[i] == "$":
+            i += 1
+            continue
+        out.append(body[i])
+        i += 1
+    return "".join(out).strip()
 
 
 def apply_integrity_to_page(page: PageIR) -> tuple[PageIR, list[str]]:
