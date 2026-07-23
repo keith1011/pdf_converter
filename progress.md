@@ -115,9 +115,16 @@
 - limit-2 / full2 golden history in git/logs
 
 ## Next
-1. Commit Phase 2.8 + modern-python cleanup when asked
+1. User review of OCR adapter design spec; then writing-plans
 2. Optional: full 14-page OCR re-run with new TABLE_ROUTER + `--check-compile`
 3. Homelab follow-ups (still uncommitted under `homelab/`)
+
+## 2026-07-23 — Brainstorm: multi-engine OCR branches (spec written)
+- Locked: D scored (edit time + formulas); speed logged not weighted
+- GOT path A; shared contract + adapters; Stage3 off on experiment branches
+- MinerU layout + UniMERNet formula + PP-OCR text; GLM weights first, code later
+- Spec: `docs/superpowers/specs/2026-07-23-ocr-engine-adapters-design.md`
+- No implementation until user approves spec → writing-plans
 
 ## 2026-07-23 — modern-python cleanup (ordered)
 1. Shared `run_vlm_generate` / `resize_image` / `strip_fences` in `vlm_client.py`; GLM delegates
