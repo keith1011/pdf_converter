@@ -1,0 +1,7 @@
+# PP-OCR text engine (optional; used by GOT + MinerU experiment configurations)
+#
+# Choose the matching paddlepaddle CUDA wheel explicitly at install time for the
+# target GPU/CUDA runtime, then install this file:
+#   pip install paddlepaddle-gpu  # select the CUDA-compatible wheel/version
+#   pip install -r requirements-ppocr.txt
+paddleocr

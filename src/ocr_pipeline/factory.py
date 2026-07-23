@@ -8,6 +8,7 @@ import yaml
 
 from .assemble import DraftAssembler, FinalPolisher
 from .engines.base import EngineError
+from .engines.ppocr_text import PpocrTextEngine
 from .engines.surya_layout import SuryaLayoutEngine
 from .engines.vlm_formula import VlmFormulaEngine
 from .engines.vlm_text import VlmTextEngine
@@ -44,7 +45,7 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     formula_name = str(engines_cfg.get("formula", "vlm")).lower()
     if layout_name != "surya":
         raise EngineError(f"Unknown layout engine: {layout_name}")
-    if text_name != "vlm":
+    if text_name not in {"vlm", "ppocr"}:
         raise EngineError(f"Unknown text engine: {text_name}")
     if formula_name != "vlm":
         raise EngineError(f"Unknown formula engine: {formula_name}")
@@ -58,12 +59,18 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         formula_engine=VlmFormulaEngine(vlm, max_new_tokens=route_tokens),
         max_new_tokens=route_tokens,
     )
+    if text_name == "ppocr":
+        text_engine = PpocrTextEngine()
+        table_engine = PpocrTextEngine()
+    else:
+        text_engine = VlmTextEngine(vlm, max_new_tokens=route_tokens)
+        table_engine = VlmTextEngine(
+            vlm, max_new_tokens=route_tokens, prompt=TABLE_ROUTER_PROMPT
+        )
     text = TextRouter(
         model_name=text_label,
-        text_engine=VlmTextEngine(vlm, max_new_tokens=route_tokens),
-        table_engine=VlmTextEngine(
-            vlm, max_new_tokens=route_tokens, prompt=TABLE_ROUTER_PROMPT
-        ),
+        text_engine=text_engine,
+        table_engine=table_engine,
         max_new_tokens=route_tokens,
     )
     crop_dir = Path(paths.get("crop_dir", "output/crops"))
