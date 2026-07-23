@@ -60,6 +60,17 @@ def build_parser(pipe_cfg: dict | None = None) -> argparse.ArgumentParser:
         action="store_true",
         help="Allow a second pipeline (unsafe on 12GB; default is single-instance lock)",
     )
+    parser.add_argument(
+        "--skip-polish",
+        action="store_true",
+        default=bool(pipe_cfg.get("skip_polish", False)),
+        help="Skip Stage3 VLM polish and finalize stitched drafts directly",
+    )
+    parser.add_argument(
+        "--output-tag",
+        default=str(pipe_cfg.get("output_tag", "")),
+        help="Optional artifact suffix: source.<tag>.tex",
+    )
     return parser
 
 
@@ -87,6 +98,8 @@ def main() -> None:
             overwrite=overwrite,
             reuse_layout=reuse_layout,
             single_instance_lock=lock_enabled,
+            skip_polish=args.skip_polish,
+            output_tag=args.output_tag,
             warns=warns,
         )
     except RuntimeError as e:

@@ -4,7 +4,7 @@
 PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--check-compile` PDF；教師 ≤10 分鐘手改後可 reuse。
 
 ## Current Phase
-**Phase 2.8 + modern-python cleanup done (uncommitted)** — tokens/LayoutArtifact/lock + shared VLM generate + ruff tooling; commit when user asks
+**Task 4: wire engine factory/router/pipeline** — complete and verified; preserve existing combined-layout call sites while adding split engine wiring
 
 ## Hardware / model
 
@@ -51,6 +51,17 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [x] Single-instance lock (`output/.ocr_pipeline.lock`; `--allow-concurrent` escape)
 - [ ] Commit Phase 2.8 package when user asks
 - **Status:** functionally complete; uncommitted
+
+### Task 4: Engine factory/router/pipeline wiring — complete
+- [x] Wire Surya/VLM adapters through factory and routers
+- [x] Add skip-polish, output tagging, and stage timing
+- [x] Run focused regression suite (20 passed)
+
+| Error | Resolution |
+|-------|------------|
+| Initial focused pytest invocation returned no terminal exit status. | Re-run after implementation and record the explicit result. |
+| PowerShell rejected the Bash-style `&&` in a diff validation command. | Ran the validation command separately using PowerShell-compatible execution. |
+| The Windows WSL `bash` shim has no `/bin/bash`, so the required Bash heredoc commit form cannot run. | Use PowerShell's native multiline string to pass the same one-line commit message. |
 
 ### Phase 2.5b: LayoutArtifact resume — complete (via 2.8)
 - [x] Persist LayoutBlock JSON; resume route/polish without re-Surya

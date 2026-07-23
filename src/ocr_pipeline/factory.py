@@ -7,8 +7,13 @@ from pathlib import Path
 import yaml
 
 from .assemble import DraftAssembler, FinalPolisher
+from .engines.base import EngineError
+from .engines.surya_layout import SuryaLayoutEngine
+from .engines.vlm_formula import VlmFormulaEngine
+from .engines.vlm_text import VlmTextEngine
 from .layout import LayoutAnalyzer
 from .pipeline import PipelineManager
+from .prompts import TABLE_ROUTER_PROMPT
 from .routers import DynamicRouter, MathRouter, TextRouter
 from .vlm_client import build_vlm_client
 
@@ -26,6 +31,7 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     layout_cfg = cfg.get("layout", {})
     paths = cfg.get("paths", {})
     vlm_cfg = cfg.get("vlm") or {}
+    engines_cfg = cfg.get("engines") or {}
 
     vlm = build_vlm_client(cfg)
     backend = str(vlm_cfg.get("backend", "qwen")).lower()
@@ -33,22 +39,39 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     polish_tokens = int(vlm_cfg.get("max_new_tokens", 2048))
     route_tokens = int(vlm_cfg.get("max_new_tokens_route", min(1024, polish_tokens)))
 
+    layout_name = str(engines_cfg.get("layout", "surya")).lower()
+    text_name = str(engines_cfg.get("text", "vlm")).lower()
+    formula_name = str(engines_cfg.get("formula", "vlm")).lower()
+    if layout_name != "surya":
+        raise EngineError(f"Unknown layout engine: {layout_name}")
+    if text_name != "vlm":
+        raise EngineError(f"Unknown text engine: {text_name}")
+    if formula_name != "vlm":
+        raise EngineError(f"Unknown formula engine: {formula_name}")
+
     layout = LayoutAnalyzer(
         dpi=int(layout_cfg.get("dpi", 200)),
         device=str(layout_cfg.get("device", "cuda")),
         force_backend=str(layout_cfg.get("force_backend", "")),
     )
     math = MathRouter(
-        engine=str(cfg.get("math", {}).get("engine", "mineru")),
-        glm_fallback=vlm,
+        formula_engine=VlmFormulaEngine(vlm, max_new_tokens=route_tokens),
         max_new_tokens=route_tokens,
     )
-    text = TextRouter(vlm=vlm, model_name=text_label, max_new_tokens=route_tokens)
+    text = TextRouter(
+        model_name=text_label,
+        text_engine=VlmTextEngine(vlm, max_new_tokens=route_tokens),
+        table_engine=VlmTextEngine(
+            vlm, max_new_tokens=route_tokens, prompt=TABLE_ROUTER_PROMPT
+        ),
+        max_new_tokens=route_tokens,
+    )
     crop_dir = Path(paths.get("crop_dir", "output/crops"))
     router = DynamicRouter(math, text, crop_dir=crop_dir)
 
     return PipelineManager(
         layout=layout,
+        layout_engine=SuryaLayoutEngine(layout),
         router=router,
         assembler=DraftAssembler(),
         polisher=FinalPolisher(vlm),

@@ -1,5 +1,15 @@
 # Progress Log
 
+## 2026-07-23 — Task 4 engine pipeline wiring
+- Factory now accepts the `engines` config and wires one `LayoutAnalyzer` both as image source and through `SuryaLayoutEngine`; VLM formula/text/table adapters route via `.ocr()`.
+- `PipelineManager` supports optional keyword-only `layout_engine`, `skip_polish`, `output_tag`, and logged `StageTimer` timings, while old combined-layout constructors remain valid.
+- Focused Task 4 regression suite: **20 passed** in 1.76s. Report: `.superpowers/sdd/task-4-report.md`.
+
+## 2026-07-23 — writing-plans: OCR engine adapters
+- Plan committed: `docs/superpowers/plans/2026-07-23-ocr-engine-adapters.md` (`79dd2f2`)
+- Rename commit: `801e9f7` (北辰 → P-ocr)
+- Awaiting execution mode: subagent-driven vs inline
+
 ## 2026-07-23 — Product rename: 北辰 → P-ocr
 - Product display name is now **P-ocr** (same meaning: 題庫 → AI 老師 Chat; OCR = feedstock only)
 - Updated `handoff.md`, design spec, `pyproject.toml` description

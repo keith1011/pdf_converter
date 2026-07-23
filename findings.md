@@ -73,6 +73,10 @@ If Stage3 starts warning `polish truncated`, raise `vlm.max_new_tokens` before t
 - Phase 2.8 code + tests + planning docs (not committed yet)
 - `homelab/`, `.cursor/`, phantom OneDrive M files, pytest/golden artifacts
 
+## Task 4 wiring (2026-07-23)
+- `PipelineManager` currently couples image conversion, `analyze_page`, and `release` to `LayoutAnalyzer`; Task 4 splits this into `layout` (image source) plus `layout_engine` (`analyze`/`release`) while retaining a fallback for existing combined test doubles.
+- Existing VLM adapters already expose the required `.ocr(crop_path)` interface. Routers must delegate to those adapters while preserving the table-specific VLM prompt.
+
 ## modern-python review (2026-07-23) — Phase 2.8 / ocr_pipeline
 
 Scope: usage freshness & complexity (not a full uv migration). Runtime: **CPython 3.14.6**; `uv` installed globally but project still **requirements.txt + `.venv` + `PYTHONPATH=src`** (no `pyproject.toml`, no ruff/ty in venv).

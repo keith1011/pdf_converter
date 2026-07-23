@@ -25,17 +25,19 @@ def normalize_display_math(text: str) -> str:
 
 
 class MathRouter:
-    """Formula/Equation -> MinerU/UniMERNet when available; else VlmClient. Body display $$."""
+    """Formula/Equation -> FormulaEngine, with legacy VLM fallback support."""
 
     def __init__(
         self,
         engine: str = "mineru",
         glm_fallback=None,
         *,
+        formula_engine=None,
         max_new_tokens: int | None = None,
     ):
         self.engine = engine
         self.glm_fallback = glm_fallback  # VlmClient (name kept for call-site compat)
+        self.formula_engine = formula_engine
         self.max_new_tokens = max_new_tokens
         self._ready = False
 
@@ -59,6 +61,8 @@ class MathRouter:
         return False
 
     def extract_latex(self, crop_path: Path) -> str:
+        if self.formula_engine is not None:
+            return self.formula_engine.ocr(crop_path)
         self._try_init_mineru()
         # TODO: wire concrete MinerU formula OCR when installed
         if self.glm_fallback is None:
@@ -78,17 +82,21 @@ class MathRouter:
 
 
 class TextRouter:
-    """Text/Title/List/Table crops -> VlmClient (formulas forced to LaTeX)."""
+    """Text/Title/List/Table crops -> TextEngine (formulas forced to LaTeX)."""
 
     def __init__(
         self,
-        vlm,
+        vlm=None,
         model_name: str = "VlmClient",
         *,
+        text_engine=None,
+        table_engine=None,
         max_new_tokens: int | None = None,
     ):
         self.vlm = vlm
         self.model_name = model_name
+        self.text_engine = text_engine
+        self.table_engine = table_engine
         self.max_new_tokens = max_new_tokens
 
     def _prompt_for(self, block_type: BlockType) -> str:
@@ -98,6 +106,14 @@ class TextRouter:
 
     def process(self, block: LayoutBlock) -> LayoutBlock:
         assert block.crop_path is not None
+        engine = (
+            self.table_engine if block.block_type == BlockType.TABLE else self.text_engine
+        )
+        if engine is not None:
+            block.raw_text = engine.ocr(block.crop_path)
+            return block
+        if self.vlm is None:
+            raise RuntimeError("No text engine available")
         prompt = self._prompt_for(block.block_type)
         block.raw_text = self.vlm.generate(
             prompt,

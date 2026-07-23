@@ -11,6 +11,11 @@ layout:
   # force: surya | fullpage
   force_backend: ""
 
+engines:
+  layout: "surya"     # surya | doclayout_yolo | mineru
+  text: "vlm"         # vlm | ppocr
+  formula: "vlm"      # vlm | got | unimernet
+
 math:
   # mineru preferred when installed; auto-falls back to VlmClient
   engine: "mineru"
@@ -48,6 +53,10 @@ paths:
 pipeline:
   # Deprecated: content-first always polishes per page (kept for config compat)
   polish_per_page: false
+  # Write draft text directly into content-first artifacts (no Stage3 VLM call).
+  skip_polish: false
+  # Optional artifact suffix, e.g. `123.got-ppocr.tex`.
+  output_tag: ""
   # skip figure/other blocks in routing
   skip_figures: true
   # Refuse a second concurrent run_ocr_pipeline (12GB VRAM)
