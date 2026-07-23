@@ -57,11 +57,35 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [x] Add skip-polish, output tagging, and stage timing
 - [x] Run focused regression suite (20 passed)
 
+### Task 6: PP-OCR Traditional Chinese text engine — in progress
+- [x] Add lazy `PpocrTextEngine` and PP-OCR requirements file
+- [x] Wire `engines.text: ppocr` while retaining the VLM default
+- [x] Add mocked adapter and factory tests
+- [ ] Run required focused test command and commit (blocked: terminal returned no exit status)
+
+### Task 7: GOT + DocLayout-YOLO experiment — complete with concerns
+- [x] Add lazy, fail-loud DocLayout-YOLO `LayoutEngine` and GOT `FormulaEngine`
+- [x] Wire `doclayout_yolo` / `got` factory selections; reuse PP-OCR
+- [x] Add CPU-only mocked tests (7 passed)
+- [x] Create `got-ppocr` branch configuration and commit
+- [ ] GPU smoke skipped: DocLayout-YOLO and PaddleOCR are not installed
+
+### Task 8: MinerU + UniMERNet experiment — in progress
+- [x] Add lazy, fail-loud MinerU `LayoutEngine` and UniMERNet `FormulaEngine`
+- [x] Wire `mineru` / `unimernet` factory selections; retain Surya/VLM defaults
+- [x] Add CPU-only mocked adapter and factory tests
+- [ ] Run focused CPU tests and commit source package on `main`
+- [ ] Create `mineru-ppocr` config branch, commit it, then return to `main`
+
 | Error | Resolution |
 |-------|------------|
 | Initial focused pytest invocation returned no terminal exit status. | Re-run after implementation and record the explicit result. |
+| Task 6 focused pytest invocation returned no terminal exit status twice. | `cmd.exe` fallback also returned no status; report the terminal limitation and leave test/commit verification to the parent. |
+| Task 7 requested pytest glob was not expanded by PowerShell/pytest. | Ran the four explicit matching test files; 7 passed. |
+| Task 7 GPU smoke dependencies are absent (`doclayout_yolo=False`, `paddleocr=False`). | Skip model download/install to avoid multi-GB unbounded work; mark DONE_WITH_CONCERNS. |
 | PowerShell rejected the Bash-style `&&` in a diff validation command. | Ran the validation command separately using PowerShell-compatible execution. |
 | The Windows WSL `bash` shim has no `/bin/bash`, so the required Bash heredoc commit form cannot run. | Use PowerShell's native multiline string to pass the same one-line commit message. |
+| Task 8 focused pytest invocation returned no shell exit status. | Record the terminal limitation; do not claim the CPU suite passed without an explicit result. |
 
 ### Phase 2.5b: LayoutArtifact resume — complete (via 2.8)
 - [x] Persist LayoutBlock JSON; resume route/polish without re-Surya

@@ -10,8 +10,10 @@ from .assemble import DraftAssembler, FinalPolisher
 from .engines.base import EngineError
 from .engines.doclayout_yolo import DocLayoutYoloEngine
 from .engines.got_formula import GotFormulaEngine
+from .engines.mineru_layout import MineruLayoutEngine
 from .engines.ppocr_text import PpocrTextEngine
 from .engines.surya_layout import SuryaLayoutEngine
+from .engines.unimernet_formula import UnimernetFormulaEngine
 from .engines.vlm_formula import VlmFormulaEngine
 from .engines.vlm_text import VlmTextEngine
 from .layout import LayoutAnalyzer
@@ -45,11 +47,11 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     layout_name = str(engines_cfg.get("layout", "surya")).lower()
     text_name = str(engines_cfg.get("text", "vlm")).lower()
     formula_name = str(engines_cfg.get("formula", "vlm")).lower()
-    if layout_name not in {"surya", "doclayout_yolo"}:
+    if layout_name not in {"surya", "doclayout_yolo", "mineru"}:
         raise EngineError(f"Unknown layout engine: {layout_name}")
     if text_name not in {"vlm", "ppocr"}:
         raise EngineError(f"Unknown text engine: {text_name}")
-    if formula_name not in {"vlm", "got"}:
+    if formula_name not in {"vlm", "got", "unimernet"}:
         raise EngineError(f"Unknown formula engine: {formula_name}")
 
     layout = LayoutAnalyzer(
@@ -60,6 +62,8 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     formula_engine = (
         GotFormulaEngine()
         if formula_name == "got"
+        else UnimernetFormulaEngine(device=str(layout_cfg.get("device", "cuda")))
+        if formula_name == "unimernet"
         else VlmFormulaEngine(vlm, max_new_tokens=route_tokens)
     )
     math = MathRouter(formula_engine=formula_engine, max_new_tokens=route_tokens)
@@ -85,6 +89,8 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         layout_engine=(
             DocLayoutYoloEngine(device=str(layout_cfg.get("device", "cuda")))
             if layout_name == "doclayout_yolo"
+            else MineruLayoutEngine(device=str(layout_cfg.get("device", "cuda")))
+            if layout_name == "mineru"
             else SuryaLayoutEngine(layout)
         ),
         router=router,

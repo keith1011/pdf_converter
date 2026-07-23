@@ -1,0 +1,93 @@
+"""MinerU layout adapter with explicit dependency and inference failures."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from ocr_pipeline.models import BBox, BlockType, LayoutBlock
+
+from .base import EngineError
+
+_LABEL_MAP = {
+    "text": BlockType.TEXT,
+    "title": BlockType.TITLE,
+    "table": BlockType.TABLE,
+    "inline_formula": BlockType.EQUATION,
+    "display_formula": BlockType.FORMULA,
+    "formula": BlockType.FORMULA,
+    "equation": BlockType.EQUATION,
+}
+
+
+def _load_mineru_layout_model(*, device: str) -> Any:
+    """Load the MinerU layout predictor only on first page analysis."""
+    try:
+        from mineru.model.layout import LayoutModel
+    except ImportError as exc:
+        raise EngineError(
+            "MinerU layout requires the `mineru` package. Install it with "
+            "`pip install -r requirements-mineru-ppocr.txt`."
+        ) from exc
+    try:
+        return LayoutModel(device=device)
+    except Exception as exc:
+        raise EngineError(
+            "MinerU layout could not load its weights. Ensure the model files are "
+            "available locally before running this experiment."
+        ) from exc
+
+
+def _block_type(label: object) -> BlockType:
+    return _LABEL_MAP.get(str(label).lower(), BlockType.OTHER)
+
+
+class MineruLayoutEngine:
+    """Detect document blocks using MinerU's layout model."""
+
+    def __init__(self, *, device: str = "cuda") -> None:
+        self.device = device
+        self._model: Any | None = None
+
+    def _ensure_model(self) -> Any:
+        if self._model is None:
+            self._model = _load_mineru_layout_model(device=self.device)
+        return self._model
+
+    def analyze(self, image_path: Path, page: int) -> list[LayoutBlock]:
+        try:
+            detections = self._ensure_model().predict(str(image_path))
+        except EngineError:
+            raise
+        except Exception as exc:
+            raise EngineError(f"MinerU layout inference failed for {image_path}.") from exc
+
+        blocks: list[LayoutBlock] = []
+        for detection in detections or []:
+            if not isinstance(detection, dict):
+                continue
+            bbox = detection.get("bbox")
+            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                continue
+            label = detection.get("label", detection.get("type", ""))
+            blocks.append(
+                LayoutBlock(
+                    block_id=f"p{page:03d}_b{len(blocks):03d}",
+                    block_type=_block_type(label),
+                    bbox=BBox(*(float(value) for value in bbox)),
+                    order=len(blocks),
+                    page=page,
+                    image_path=image_path,
+                    meta={
+                        "label": str(label),
+                        "confidence": float(detection.get("score", 0.0)),
+                    },
+                )
+            )
+        blocks.sort(key=lambda block: (block.bbox.y1, block.bbox.x1, block.order))
+        for order, block in enumerate(blocks):
+            block.order = order
+        return blocks
+
+    def release(self) -> None:
+        self._model = None

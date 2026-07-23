@@ -77,6 +77,20 @@ If Stage3 starts warning `polish truncated`, raise `vlm.max_new_tokens` before t
 - `PipelineManager` currently couples image conversion, `analyze_page`, and `release` to `LayoutAnalyzer`; Task 4 splits this into `layout` (image source) plus `layout_engine` (`analyze`/`release`) while retaining a fallback for existing combined test doubles.
 - Existing VLM adapters already expose the required `.ocr(crop_path)` interface. Routers must delegate to those adapters while preserving the table-specific VLM prompt.
 
+## Task 6 PP-OCR text adapter (2026-07-23)
+- `TextEngine` is a runtime-checkable protocol with only `ocr(crop_path: Path) -> str`; `EngineError` is the shared explicit-failure type.
+- `build_default_pipeline` currently accepts only `engines.text: vlm`; the PP-OCR branch must preserve the existing VLM text and table engines.
+
+## Task 7 GOT + DocLayout-YOLO experiment (2026-07-23)
+- `DocLayoutYoloEngine` lazy-loads `YOLOv10.from_pretrained("juliozhao/DocLayout-YOLO-DocStructBench")`; inference boxes are sorted top-to-bottom and labels map to shared `BlockType`.
+- `GotFormulaEngine` lazy-loads `stepfun-ai/GOT-OCR2_0` through Transformers remote code and calls `model.chat(..., ocr_type="format")`; dependency, model-load, and inference failures raise `EngineError` rather than falling back to Qwen.
+- Mocked CPU tests passed (7). GPU smoke intentionally skipped because `doclayout_yolo` and `paddleocr` are absent; no multi-GB weights were downloaded.
+
+## Task 8 MinerU + UniMERNet experiment (2026-07-23)
+- `MineruLayoutEngine` and `UnimernetFormulaEngine` lazy-load their optional dependencies and convert unavailable dependencies, weights, and inference failures to `EngineError`; neither falls back to Qwen.
+- Current MinerU UniMERNet source accepts detected formula regions plus a decoded image and returns formula items with `latex`; the adapter treats each formula crop as one display-formula region.
+- Factory now accepts `layout: mineru` and `formula: unimernet`, while main retains `surya` / `vlm` defaults. Mocked tests do not download models; GPU smoke remains optional until local caches exist.
+
 ## modern-python review (2026-07-23) — Phase 2.8 / ocr_pipeline
 
 Scope: usage freshness & complexity (not a full uv migration). Runtime: **CPython 3.14.6**; `uv` installed globally but project still **requirements.txt + `.venv` + `PYTHONPATH=src`** (no `pyproject.toml`, no ruff/ty in venv).

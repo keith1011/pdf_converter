@@ -1,5 +1,21 @@
 # Progress Log
 
+## 2026-07-23 — Task 8 MinerU + UniMERNet experiment
+- Added lazy, fail-loud `MineruLayoutEngine` and `UnimernetFormulaEngine`; the formula adapter represents its crop as one full-image display-formula region for MinerU's current UniMERNet API.
+- Factory accepts `layout: mineru` and `formula: unimernet`; PP-OCR is reused for text/table routing and the default Surya/VLM configuration is unchanged.
+- Added mocked CPU layout, formula, and factory tests plus `requirements-mineru-ppocr.txt`. The focused pytest command returned no shell exit status, so its result is not asserted; no GPU models were downloaded.
+
+## 2026-07-23 — Task 7 GOT + DocLayout-YOLO experiment
+- Added lazy `DocLayoutYoloEngine` and `GotFormulaEngine`; both convert missing dependencies, unavailable weights, and runtime failures into explicit `EngineError` values with no Qwen fallback.
+- Factory accepts `layout: doclayout_yolo` and `formula: got`; branch `got-ppocr` config uses DocLayout-YOLO + PP-OCR + GOT, skips polish, and tags artifacts `got-ppocr`.
+- Mocked CPU tests: **7 passed**. GPU smoke skipped because DocLayout-YOLO and PaddleOCR are not installed; report `DONE_WITH_CONCERNS`.
+
+## 2026-07-23 — Task 6 PP-OCR text engine
+- Added `PpocrTextEngine` with lazy PaddleOCR import, documented `chinese_cht` default, legacy `.ocr(..., cls=True)` parsing, and explicit missing-dependency `EngineError`.
+- Factory now selects PP-OCR for text/table routes under `engines.text: ppocr`; VLM remains the default. Added mocked unit tests and `requirements-ppocr.txt`.
+- IDE diagnostics: no errors. Required pytest command and `cmd.exe` fallback both returned no shell exit status, so verification and requested commit remain blocked.
+- Report: `.superpowers/sdd/task-6-report.md`.
+
 ## 2026-07-23 — Task 4 engine pipeline wiring
 - Factory now accepts the `engines` config and wires one `LayoutAnalyzer` both as image source and through `SuryaLayoutEngine`; VLM formula/text/table adapters route via `.ocr()`.
 - `PipelineManager` supports optional keyword-only `layout_engine`, `skip_polish`, `output_tag`, and logged `StageTimer` timings, while old combined-layout constructors remain valid.

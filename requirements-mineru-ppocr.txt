@@ -1,0 +1,7 @@
+# MinerU layout + UniMERNet formula + PP-OCR experiment.
+#
+# Install a CUDA-compatible paddlepaddle-gpu wheel separately, then:
+#   pip install -r requirements-mineru-ppocr.txt
+# MinerU and UniMERNet weights load lazily on the first page/formula crop.
+mineru
+paddleocr
