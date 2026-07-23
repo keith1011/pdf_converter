@@ -159,7 +159,7 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | Dual `run_ocr_pipeline` PIDs during monitor | note | Avoid concurrent runs on 12GB |
 
 ## Next Action
-1. Commit Phase 2.8 when user asks (tokens + layout artifact + lock + tests)
-2. Optional: full OCR re-run with `--reuse-layout` after one layout write / new TABLE_ROUTER
-3. Homelab Wave 1 green — do **not** start Wave 2 until explicitly requested
-4. Reload Cursor MCP after key rotate (if qdrant-find fails auth)
+1. Optional: full OCR re-run with `--reuse-layout` / new TABLE_ROUTER (Phase 2.7 leftover)
+2. Phase Ship 2: OCR overlay PDF — only when feedstock quality is enough
+3. Homelab Wave 2 (Ollama / B agent) — **closed** until explicitly requested
+4. Remaining dirty tree: OCR touch files + `uv.lock` + `.superpowers/sdd/` reports (triage / discard noise)

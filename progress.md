@@ -256,3 +256,8 @@ Via `npx skills add … -g -a cursor -y --copy` → `~/.agents/skills`, then cop
 - Reviewed the updated design at `~/.gstack/projects/pdf-scaner/a1217-main-design-20260722-210437.md`.
 - Iteration-1 changes are present: Tailnet/API-key posture, DONE contract, Samba-only, A-side embedding, Snapshot API, MCP read-only guidance, Wave-2 gates, and B resource budget.
 - Remaining blockers are documented in `findings.md`: atomic sync/publication, precise manifest/key/backup/network implementation contracts, Qdrant Point-ID validity, and A-side resource controls.
+
+## 2026-07-23 23:35 — Homelab Wave 1 committed; Python 3.12 pin
+- Commit `db664cf`: homelab Wave 1 scripts/ingest/DATA_PLANE, Cursor rules, handbooks, `.python-version`, `requires-python >=3.12,<3.13`
+- Follow-up: refresh `uv.lock` for 3.12-only markers (dropped 3.11/3.14 resolution branches)
+- Confirmed `py -0p` has no 3.14; project `.venv` is 3.12.13
