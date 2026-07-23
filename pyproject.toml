@@ -5,7 +5,7 @@
 [project]
 name = "pdf-scaner"
 version = "0.0.0"
-description = "北辰 feedstock OCR pipeline (local tooling metadata)"
+description = "P-ocr feedstock OCR pipeline (local tooling metadata)"
 requires-python = ">=3.11"
 readme = "README.md"
 

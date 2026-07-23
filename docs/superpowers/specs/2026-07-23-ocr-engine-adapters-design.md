@@ -1,7 +1,7 @@
 # Design: OCR engine adapters + multi-branch comparison
 
 **Date:** 2026-07-23  
-**Product:** 北辰（題庫 → AI 老師 Chat）；本設計只動 **OCR 原料管線**，不做 Chat UI。  
+**Product:** **P-ocr**（題庫 → AI 老師 Chat）；本設計只動 **OCR 原料管線**，不做 Chat UI。  
 **Status:** Approved in brainstorming dialogue (2026-07-23).  
 **Repo:** `pdf scaner`
 
@@ -107,7 +107,7 @@ Exact branch names may be shortened (`got-ppocr`, `mineru-ppocr`, `qwen-vl`) as 
 
 ## 8. Out of scope (this design wave)
 
-- 北辰 Chat / teacher UI
+- P-ocr Chat / teacher UI
 - Second vector DB (Chroma / Cognee / Mengram)
 - Full uv migration of the torch stack
 - Full-page GOT as final polish (rejected; too slow)

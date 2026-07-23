@@ -1,7 +1,11 @@
 # Progress Log
 
-## 2026-07-23 — handoff.md 依 2026-07-23 北辰/Approach B 架構覆寫
-- Goal/topology/data ownership/Homelab/Pitfalls 對齊 北辰（題庫→AI 老師 Chat；OCR 只是原料）
+## 2026-07-23 — Product rename: 北辰 → P-ocr
+- Product display name is now **P-ocr** (same meaning: 題庫 → AI 老師 Chat; OCR = feedstock only)
+- Updated `handoff.md`, design spec, `pyproject.toml` description
+
+## 2026-07-23 — handoff.md 依 2026-07-23 P-ocr/Approach B 架構覆寫
+- Goal/topology/data ownership/Homelab/Pitfalls 對齊 P-ocr（題庫→AI 老師 Chat；OCR 只是原料）
 - 保留 Next actions 與 Key files；無 API key 明文
 
 ## 2026-07-23 11:06 — handoff.md written for next agent

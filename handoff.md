@@ -1,19 +1,19 @@
-# Handoff — 北辰 (read this first)
+# Handoff — P-ocr (read this first)
 
-**Date:** 2026-07-23 (architecture rewrite: 北辰 / Approach B)  
+**Date:** 2026-07-23 (architecture rewrite: P-ocr / Approach B)  
 **Repo:** `C:\Users\a1217\OneDrive\桌面\aiworkplace\pdf scaner`  
 **Git:** branch `main` @ `02a68a6` (plus large uncommitted work)  
 **Audience:** next Cursor agent — open this, then `task_plan.md` / `findings.md` / `progress.md`, then act.
 
 Do **not** invent state. Prefer filesystem planning docs over chat memory. Never paste API keys (Qdrant reader key in `~/.cursor/mcp.json`; writer keys in B `~/homelab/.env` only).
 
-**Naming:** the product is **北辰**. Do not call it an “OCR product.” OCR is only the raw-material pipeline.
+**Naming:** the product is **P-ocr** (formerly 北辰). Do not call it an “OCR product.” OCR is only the raw-material pipeline.
 
 ---
 
-## 1. Goal — 北辰
+## 1. Goal — P-ocr
 
-**北辰** = 題庫 → AI 老師 Chat.  
+**P-ocr** = 題庫 → AI 老師 Chat.  
 OCR is only how we produce raw materials (`.tex` / `.txt` / `.pageir.json`). Teacher edit bar for those drafts: ≤10 minutes, then reuse.
 
 - Chat / 老師 UI are **not** the current milestone.
@@ -221,7 +221,7 @@ Keys: reader in `~/.cursor/mcp.json`; writer/reader pair on B `~/homelab/.env`. 
 
 ## 7. Pitfalls (do not rediscover)
 
-1. **北辰 ≠ OCR** — OCR is feedstock only; do not scope Chat UI or “OCR product” as the north star.
+1. **P-ocr ≠ OCR** — OCR is feedstock only; do not scope Chat UI or “OCR product” as the north star.
 2. **CUDA multinomial / `TensorCompare.cu` assert** — any `temperature>0` → `do_sample=True` → crash on 4bit Qwen-VL. Keep greedy.
 3. **Surya VRAM leak** — `VllmBackend.stop()` is handle-only; atexit docker cleanup is too late for Stage3. Must `docker stop surya-vllm-*` in `release()` and wait for free VRAM (~11GB → ~390MB after fix).
 4. **Tabular-in-math** — Stage2/polish can emit `\begin{tabular}` / `\hline` / `&` rows; if classified as math → `Missing $` / `Misplaced \noalign`. Segmenter must explode chrome; `_TEX_MATH_HINT` must **not** match bare `\begin`.
@@ -252,7 +252,7 @@ Project `CLAUDE.md` routing applies. When in doubt, invoke the skill.
 | `/qa` / `/qa-only` | Behavior QA of pipeline / CLI outputs |
 | `/ship` / `/land-and-deploy` | PR / ship / land |
 | `/spec` | Backlog-ready issue/spec |
-| `/office-hours` | Product ideas / brainstorming (北辰 scope) |
+| `/office-hours` | Product ideas / brainstorming (P-ocr scope) |
 | `/plan-eng-review` | Architecture / eng plan |
 | `/plan-ceo-review` | Strategy / scope |
 | `/autoplan` | Full review pipeline |
@@ -333,7 +333,7 @@ Expect after layout release: log line like `[Layout] Stopped docker VLM: surya-v
 
 **Also do not:**
 
-- Call 北辰 an “OCR product”
+- Call P-ocr an “OCR product”
 - Re-enable sampling / non-zero temperature for VLM generate
 - Skip `docker stop surya-vllm-*` in layout release
 - Restore marking-scheme tabular as Ship 1 success metric
@@ -351,7 +351,7 @@ Ship 2 OCR overlay PDF and LayoutArtifact resume are backlog, not “broken prod
 
 ## Quick resume checklist
 
-1. Read this file + `task_plan.md` (Current Phase / Next Action) — product = **北辰**
+1. Read this file + `task_plan.md` (Current Phase / Next Action) — product = **P-ocr**
 2. `git status -sb` and confirm uncommitted critical paths
 3. Ask user which priority: **commit** vs **2.8 speed** vs **full OCR re-run** vs **homelab**
 4. Respect data ownership table (A ingest = only Qdrant writer)
