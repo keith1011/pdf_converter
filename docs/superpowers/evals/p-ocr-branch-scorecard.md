@@ -4,9 +4,9 @@ Compare the same golden input and shared output contract (`.tex`, `.txt`, `.page
 
 | Branch | Formula edits (score) | Prose edit min (score) | Compile (score) | Notes | layout_s (log) | text_s (log) | formula_s (log) | total_s (log) |
 |--------|----------------------|------------------------|-----------------|-------|----------------|--------------|-----------------|---------------|
-| qwen-vl | | | | | | | | |
-| got-ppocr | | | | | | | | |
-| mineru-ppocr | | | | | | | | |
+| qwen-vl | | | | not re-run this session | | | | |
+| got-ppocr | | | | limit-1 smoke 2026-07-23; PP-OCR CPU; GOT=HF `GOT-OCR-2.0-hf`; route=29.993s (text+formula combined) | 3.881 | | | 33.880 |
+| mineru-ppocr | | | | limit-1 smoke 2026-07-23; PP-OCR CPU; MinerU PP-DocLayoutV2 + UniMERNet; route=35.842s | 3.380 | | | 39.228 |
 
 ## Scoring rules
 
@@ -14,6 +14,12 @@ Compare the same golden input and shared output contract (`.tex`, `.txt`, `.page
 - **Prose edit min:** record the teacher's manual editing time in minutes.
 - **Compile:** record whether the draft passes `--check-compile` (`pass` / `fail`).
 - **Timing columns:** capture wall-clock stage timings from the run log only. They are **not ranking weights**.
+
+## Smoke logs (this session)
+
+- `output/smoke_got_ppocr_limit1.log` → `output/123.got-ppocr.tex`
+- `output/smoke_mineru_ppocr_limit1.log` → `output/123.mineru-ppocr.tex`
+- Pipeline `TIMING:` prints `layout` / `route` / `skip_polish` / `finalize` / `total` (route covers Stage2 text+formula together).
 
 ## After each golden run
 

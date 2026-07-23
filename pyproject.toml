@@ -1,6 +1,7 @@
-# Tooling-only pyproject (does NOT replace requirements-*.txt / .venv GPU stack).
-# Install ruff:  uv pip install -p .venv ruff
-# Or one-shot:   uvx ruff check src tests
+# P-ocr feedstock OCR — uv / pyproject is the install source of truth.
+# Runtime GPU notes: experiment stacks (GOT / MinerU / PP-OCR) use optional
+# dependency groups; Windows torch CUDA uses the pytorch-cu126 index below.
+# Optional Surya still: `uv pip install surya-ocr --no-deps` (Pillow pin issues).
 
 [project]
 name = "pdf-scaner"
@@ -8,9 +9,57 @@ version = "0.0.0"
 description = "P-ocr feedstock OCR pipeline (local tooling metadata)"
 requires-python = ">=3.11"
 readme = "README.md"
+dependencies = [
+    "accelerate>=0.33.0",
+    "bitsandbytes>=0.43.0",
+    "filetype>=1.2",
+    "opencv-python-headless>=4.8",
+    "pillow>=10.0.0",
+    "platformdirs>=4.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "pymupdf>=1.28.0",
+    "pypdfium2>=4.30",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "torch>=2.13.0",
+    "torchvision>=0.19.0",
+    "transformers>=4.49.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ocr_pipeline"]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
 
 [dependency-groups]
-lint = ["ruff>=0.11"]
+dev = [{ include-group = "lint" }, { include-group = "test" }]
+got = [
+    "doclayout-yolo>=0.0.4",
+    "paddleocr>=2.10.0",
+]
+lint = [
+    "ruff>=0.11",
+    "ty",
+]
+test = [
+    "pytest>=8.0",
+    "pytest-cov",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
 
 [tool.ruff]
 line-length = 100
@@ -18,6 +67,8 @@ target-version = "py311"
 src = ["src", "tests"]
 extend-exclude = [
   ".venv",
+  ".venv-engines312",
+  ".venv-mineru312",
   "output",
   "data",
   "qdrant_storage",
@@ -26,25 +77,25 @@ extend-exclude = [
 
 [tool.ruff.lint]
 select = [
-  "E",   # pycodestyle errors
-  "W",   # pycodestyle warnings
-  "F",   # pyflakes
-  "I",   # isort
-  "UP",  # pyupgrade
-  "B",   # bugbear
-  "SIM", # simplify
+  "E",
+  "W",
+  "F",
+  "I",
+  "UP",
+  "B",
+  "SIM",
 ]
 ignore = [
-  "T20",    # print OK for CLI progress
-  "COM812", # formatter conflict
-  "ISC001", # formatter conflict
-  "E501",   # line length — prompts / logs are long
-  "UP042",  # str|Enum keeps JSON-friendly .value for PageIR / artifacts
+  "T20",
+  "COM812",
+  "ISC001",
+  "E501",
+  "UP042",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]  # assert in tests
-"run_ocr_pipeline.py" = ["E402"]  # sys.path bootstrap before package imports
+"tests/**" = ["S101"]
+"run_ocr_pipeline.py" = ["E402"]
 "arrange_only.py" = ["E402"]
 "extract_questions.py" = ["E402"]
 "run_extract_pipeline.py" = ["E402"]
@@ -54,3 +105,13 @@ ignore = [
 quote-style = "double"
 indent-style = "space"
 docstring-code-format = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.terminal]
+error-on-warning = false

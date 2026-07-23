@@ -2,7 +2,7 @@ from pathlib import Path
 
 from ocr_pipeline.assemble import FinalPolisher
 from ocr_pipeline.cli_report import WarnCollector
-from ocr_pipeline.engines.base import EngineError
+from ocr_pipeline.engines.ppocr_text import PpocrTextEngine
 from ocr_pipeline.factory import build_default_pipeline
 from ocr_pipeline.models import BBox, BlockType, LayoutBlock
 from ocr_pipeline.pipeline import PipelineManager
@@ -78,10 +78,8 @@ def test_skip_polish_uses_draft_and_tags_output(tmp_path, capsys):
     assert "TIMING: layout=" in capsys.readouterr().out
 
 
-def test_factory_rejects_unimplemented_engine_name():
-    try:
-        build_default_pipeline({"engines": {"text": "ppocr"}})
-    except EngineError as exc:
-        assert "Unknown text engine: ppocr" in str(exc)
-    else:
-        raise AssertionError("factory accepted an unimplemented text engine")
+def test_factory_builds_ppocr_text_engines():
+    manager = build_default_pipeline({"engines": {"text": "ppocr"}})
+
+    assert isinstance(manager.router.text_router.text_engine, PpocrTextEngine)
+    assert isinstance(manager.router.text_router.table_engine, PpocrTextEngine)

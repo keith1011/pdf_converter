@@ -1,9 +1,10 @@
 """PP-OCR text adapter.
 
 Traditional Chinese uses PaddleOCR's documented ``chinese_cht`` language code.
-The adapter uses PaddleOCR's established ``PaddleOCR(...).ocr(path, cls=True)``
-interface and intentionally has no VLM fallback: unavailable OCR dependencies
-must fail loudly so experiment results remain attributable to PP-OCR.
+The adapter prefers PaddleOCR 3.x ``predict()`` (``rec_texts``), with a legacy
+``.ocr()`` fallback for older result shapes. It intentionally has no VLM
+fallback: unavailable OCR dependencies must fail loudly so experiment results
+remain attributable to PP-OCR.
 """
 
 from __future__ import annotations
@@ -22,22 +23,29 @@ def _load_paddle_ocr(*, lang: str) -> Any:
         from paddleocr import PaddleOCR
     except ImportError as exc:
         raise EngineError(
-            "PP-OCR requires paddleocr. Install it with "
-            "`pip install -r requirements-ppocr.txt`."
+            "PP-OCR requires paddleocr. Install it with `pip install -r requirements-ppocr.txt`."
         ) from exc
-    return PaddleOCR(lang=lang)
+    # Orientation/unwarp models add startup cost and are unnecessary for crops.
+    return PaddleOCR(
+        lang=lang,
+        use_doc_orientation_classify=False,
+        use_doc_unwarping=False,
+    )
 
 
 def _extract_lines(result: Any) -> list[str]:
-    """Extract recognized strings from PaddleOCR's nested legacy result."""
+    """Extract recognized strings from PaddleOCR 3.x or legacy results."""
     lines: list[str] = []
 
     def visit(value: Any) -> None:
-        if (
-            isinstance(value, tuple)
-            and len(value) >= 2
-            and isinstance(value[0], str)
-        ):
+        if value is None:
+            return
+        if hasattr(value, "get") and not isinstance(value, (str, bytes)):
+            texts = value.get("rec_texts")
+            if isinstance(texts, list):
+                lines.extend(str(t) for t in texts if t)
+                return
+        if isinstance(value, tuple) and len(value) >= 2 and isinstance(value[0], str):
             lines.append(value[0])
             return
         if isinstance(value, list):
@@ -46,6 +54,13 @@ def _extract_lines(result: Any) -> list[str]:
 
     visit(result)
     return lines
+
+
+def _run_paddle_ocr(client: Any, crop_path: Path) -> Any:
+    """Call predict() on 3.x; fall back to ocr() without deprecated cls=."""
+    if hasattr(client, "predict"):
+        return client.predict(str(crop_path))
+    return client.ocr(str(crop_path))
 
 
 class PpocrTextEngine:
@@ -58,4 +73,8 @@ class PpocrTextEngine:
     def ocr(self, crop_path: Path) -> str:
         if self._ocr is None:
             self._ocr = _load_paddle_ocr(lang=self.lang)
-        return "\n".join(_extract_lines(self._ocr.ocr(str(crop_path), cls=True))).strip()
+        try:
+            result = _run_paddle_ocr(self._ocr, crop_path)
+        except Exception as exc:
+            raise EngineError(f"PP-OCR inference failed for {crop_path}.") from exc
+        return "\n".join(_extract_lines(result)).strip()

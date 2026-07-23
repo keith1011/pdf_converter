@@ -62,7 +62,12 @@ def test_doclayout_engine_is_lazy_and_maps_boxes(tmp_path, monkeypatch):
 
     assert loaded == []
     blocks = engine.analyze(image, page=2)
-    assert loaded == [{"model_id": "juliozhao/DocLayout-YOLO-DocStructBench"}]
+    assert loaded == [
+        {
+            "model_id": "juliozhao/DocLayout-YOLO-DocStructBench",
+            "weights_file": "doclayout_yolo_docstructbench_imgsz1024.pt",
+        }
+    ]
     assert [block.block_type for block in blocks] == [BlockType.FORMULA, BlockType.TEXT]
     assert [block.order for block in blocks] == [0, 1]
     assert blocks[0].bbox.y1 == 20.0

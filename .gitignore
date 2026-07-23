@@ -1,9 +1,13 @@
 # Local / runtime
 .venv/
+.venv-engines312/
+.venv-mineru312/
 venv*/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
+.ty/
 .cache/
 huggingface/
 *.log

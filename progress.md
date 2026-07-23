@@ -1,5 +1,41 @@
 # Progress Log
 
+## 2026-07-23 — modern-python uv migrate + pytest
+- Migrated install path to `uv sync` / `uv run`; committed adapter smoke fixes with lockfile.
+- `uv run pytest`: 120 passed. Ruff engines clean. MinerU stays in `.venv-mineru312`.
+
+## 2026-07-23 — modern-python: check code (engines)
+- Ran ruff check/format on `src/ocr_pipeline/engines` + related tests; fixed I001 import order; formatted 6 files.
+- Focused pytest engines: **9 passed**. No full uv migrate (GPU/requirements stacks stay).
+
+## 2026-07-23 23:10 — Wave 1 still blocked on B shell
+- Opened interactive SSH window earlier; BatchMode key auth still denied; `WAVE1_B_DONE` absent after two poll windows (~15+10 min).
+- Staged for when B is reachable: `wave1-on-b.sh` (ufw + RP + key rotate), then A `wave1-finish-on-a.ps1`.
+- A-side already green-ish: scripts, DATA_PLANE draft, RP `20260723T122750Z`, job `wave1demo` published, `qdrant.env.new` staged.
+- **Hard gate:** run on B (or password-SSH from A):
+  `bash /data/pdf-scaner/backups/ssh-bootstrap/install-pc-a-key.sh`
+  `bash /data/pdf-scaner/backups/wave1-scripts/wave1-on-b.sh`
+
+## 2026-07-23 21:10 — Homelab Wave 1 (partial; waiting on B)
+- Scripts added under `homelab/scripts/`: ufw, backup RP, restore drill, key apply, reader neg-test, wave1-on-b, A finish helpers.
+- Samba sync: `Z:\backups\wave1-scripts\`, `Z:\backups\ssh-bootstrap\pc-a.pub`.
+- A→B SSH still blocked (pubkey not on B). Host key for `192.168.1.107` accepted.
+- Jobs backup RP `20260723T122750Z` + restore-drill (tar has 1× DONE.json) — A-side; B qdrant snapshot pending SSH/`wave1-on-b.sh`.
+- Generated `qdrant.env.new` on Z: for rotation (not echoed).
+- Published second doc job `20260723-130314-wave1demo` (not ingested yet).
+- **User action on B:** `bash /data/pdf-scaner/backups/ssh-bootstrap/install-pc-a-key.sh` then `bash /data/pdf-scaner/backups/wave1-scripts/wave1-on-b.sh`
+- After `WAVE1_B_DONE`: run `homelab/scripts/wave1-finish-on-a.ps1` on A.
+
+## 2026-07-23 — Routing rules acknowledged
+- Read and will follow `.cursor/rules/tool-routing.mdc` + `.cursor/rules/planning-with-files.mdc`.
+- Working memory stays in `task_plan.md` / `findings.md` / `progress.md`; Skill = workflow, MCP = external evidence; pick both when the domain table says so.
+
+## 2026-07-23 — GPU smoke got-ppocr + mineru-ppocr (limit-1)
+- Built `.venv-engines312` (GOT/DocLayout/PP-OCR) and `.venv-mineru312` (MinerU/`transformers` 4.57).
+- Adapter fixes: PP-OCR 3.x `predict`, DocLayout `hf_hub_download`, GOT HF-native, MinerU PP-DocLayoutV2/UniMERNet loaders.
+- Smokes OK (exit 0): `123.got-ppocr.tex` total=33.880s; `123.mineru-ppocr.tex` total=39.228s. Scorecard timings filled (scores still empty).
+- Main `config/ocr_pipeline.yaml` restored to surya/vlm defaults afterward.
+
 ## 2026-07-23 — Task 10 P-ocr branch comparison scorecard
 - Added `docs/superpowers/evals/p-ocr-branch-scorecard.md` for `qwen-vl`, `got-ppocr`, and `mineru-ppocr`.
 - Scored columns are formula edits, prose edit minutes, and compile; `layout_s`, `text_s`, `formula_s`, and `total_s` are logged only, never ranking weight.

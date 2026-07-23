@@ -15,9 +15,7 @@ class StageTimer:
         try:
             yield
         finally:
-            self._stages[name] = self._stages.get(name, 0.0) + (
-                time.perf_counter() - start
-            )
+            self._stages[name] = self._stages.get(name, 0.0) + (time.perf_counter() - start)
 
     def as_dict(self) -> dict[str, float]:
         out = dict(self._stages)

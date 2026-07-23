@@ -6,12 +6,14 @@ from ocr_pipeline.models import BlockType
 
 def test_mineru_layout_engine_loads_lazily_and_sorts_blocks(tmp_path, monkeypatch):
     class Model:
-        def predict(self, image_path):
-            assert image_path.endswith("page.png")
+        def predict(self, image):
+            assert getattr(image, "mode", None) == "RGB"
             return [
                 {"label": "text", "bbox": [20, 80, 100, 110], "score": 0.8},
                 {"label": "display_formula", "bbox": [10, 20, 90, 50], "score": 0.9},
             ]
+
+    from PIL import Image
 
     import ocr_pipeline.engines.mineru_layout as mod
 
@@ -21,6 +23,7 @@ def test_mineru_layout_engine_loads_lazily_and_sorts_blocks(tmp_path, monkeypatc
     )
     engine = MineruLayoutEngine()
     image = tmp_path / "page.png"
+    Image.new("RGB", (8, 8), color=(255, 255, 255)).save(image)
 
     assert loaded == []
     blocks = engine.analyze(image, page=2)

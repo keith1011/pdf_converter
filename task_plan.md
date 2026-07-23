@@ -4,7 +4,11 @@
 PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--check-compile` PDF；教師 ≤10 分鐘手改後可 reuse。
 
 ## Current Phase
-**Task 4: wire engine factory/router/pipeline** — complete and verified; preserve existing combined-layout call sites while adding split engine wiring
+**modern-python uv migrate** — complete (`uv.lock` + groups); pytest 120 passed; commit pending user request (in progress).
+
+## Routing (locked)
+- Always: planning-with-files (`task_plan.md` / `findings.md` / `progress.md`)
+- Domain table: `.cursor/rules/tool-routing.mdc` (Skill + MCP); handbooks `docs/SKILL_HANDBOOK.md`, `docs/MCP_HANDBOOK.md`
 
 ## Hardware / model
 
@@ -68,7 +72,8 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [x] Wire `doclayout_yolo` / `got` factory selections; reuse PP-OCR
 - [x] Add CPU-only mocked tests (7 passed)
 - [x] Create `got-ppocr` branch configuration and commit
-- [ ] GPU smoke skipped: DocLayout-YOLO and PaddleOCR are not installed
+  - [ ] GPU smoke skipped: DocLayout-YOLO and PaddleOCR are not installed
+  - [x] GPU smoke limit-1 (2026-07-23): total=33.880s → `output/123.got-ppocr.tex` (PP-OCR CPU; GOT HF-native)
 
 ### Task 8: MinerU + UniMERNet experiment — complete with concerns
 - [x] Add lazy, fail-loud MinerU `LayoutEngine` and UniMERNet `FormulaEngine`
@@ -77,7 +82,8 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [x] Commit source package on `main` (`87801bf`)
 - [x] Create and commit `mineru-ppocr` config branch (`85a8576`), then return to `main`
 - [x] Focused CPU pytest: 10 passed
-- [ ] GPU smoke skipped because no cached optional models
+  - [ ] GPU smoke skipped because no cached optional models
+  - [x] GPU smoke limit-1 (2026-07-23): total=39.228s → `output/123.mineru-ppocr.tex` (dedicated `.venv-mineru312`, transformers 4.57)
 
 ### Task 10: P-ocr branch comparison scorecard — complete
 - [x] Scorecard: `docs/superpowers/evals/p-ocr-branch-scorecard.md`
@@ -110,6 +116,19 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [x] Samba `\\192.168.1.107\pdf-scaner` mapped on A
 - [x] Cursor MCP → B (`QDRANT_URL` + reader key + read-only); collections empty (fresh)
 - **Status:** Wave 0 complete
+
+### Phase H1: Homelab Wave 1 (Linux data plane finish) — in progress
+- [x] Repo scripts: `homelab/scripts/` (ufw, backup RP, restore drill, key apply, reader neg-test, wave1-on-b)
+- [x] Docs draft: `DATA_PLANE.md` firewall/backup/key checklist (Status not green until gates pass)
+- [x] A-side jobs RP `20260723T122750Z` + tar DONE check
+- [x] Second job published: `20260723-130314-wave1demo` (ingest pending)
+- [x] Rotated key material staged: `Z:\backups\wave1-scripts\qdrant.env.new` (not in git)
+- [ ] A→B SSH key auth (`install-pc-a-key.sh` on B)
+- [ ] B `ufw` + full RP (incl. Qdrant snapshot) via `wave1-on-b.sh`
+- [ ] Key rotate applied on B; A MCP/env + reader neg-test
+- [ ] Ingest `wave1demo` + idempotent re-ingest
+- [ ] Mark Wave 1 green; **Wave 2 stays closed**
+- **Status:** blocked on B one-time key install / `wave1-on-b.sh`
 
 ### Phase 3: Qdrant ingest — after H0 green (was optional-parallel)
 

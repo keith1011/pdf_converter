@@ -1,7 +1,11 @@
-# MinerU layout + UniMERNet formula + PP-OCR experiment.
+# DEPRECATED: MinerU cannot lock into the main Py3.14 uv env
+# (mineru[pipeline] wants transformers<5; fasttext-predict needs MSVC on 3.14).
 #
-# Install a CUDA-compatible paddlepaddle-gpu wheel separately, then:
-#   pip install -r requirements-mineru-ppocr.txt
-# MinerU and UniMERNet weights load lazily on the first page/formula crop.
-mineru
-paddleocr
+# Use the dedicated experiment venv:
+#   .\.venv-mineru312\Scripts\python.exe  (Python 3.12, transformers 4.57)
+#   uv pip install --python .venv-mineru312 "mineru[pipeline]" paddleocr
+#
+# Or recreate:
+#   uv venv .venv-mineru312 --python 3.12
+#   uv pip install --python .venv-mineru312 torch torchvision --index-url https://download.pytorch.org/whl/cu126
+#   uv pip install --python .venv-mineru312 "mineru[pipeline]" paddleocr paddlepaddle==3.2.2 --index-url https://www.paddlepaddle.org.cn/packages/stable/cpu/

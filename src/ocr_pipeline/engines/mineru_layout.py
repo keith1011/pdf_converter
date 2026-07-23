@@ -1,4 +1,4 @@
-"""MinerU layout adapter with explicit dependency and inference failures."""
+"""MinerU layout adapter (PP-DocLayoutV2) with fail-loud dependency errors."""
 
 from __future__ import annotations
 
@@ -11,26 +11,47 @@ from .base import EngineError
 
 _LABEL_MAP = {
     "text": BlockType.TEXT,
+    "plain_text": BlockType.TEXT,
+    "paragraph_title": BlockType.TITLE,
+    "doc_title": BlockType.TITLE,
     "title": BlockType.TITLE,
     "table": BlockType.TABLE,
+    "table_caption": BlockType.OTHER,
     "inline_formula": BlockType.EQUATION,
     "display_formula": BlockType.FORMULA,
     "formula": BlockType.FORMULA,
     "equation": BlockType.EQUATION,
+    "image": BlockType.OTHER,
+    "figure": BlockType.OTHER,
 }
 
 
+def _block_type(label: object) -> BlockType:
+    key = str(label or "").lower().replace(" ", "_")
+    return _LABEL_MAP.get(key, BlockType.OTHER)
+
+
 def _load_mineru_layout_model(*, device: str) -> Any:
-    """Load the MinerU layout predictor only on first page analysis."""
+    """Load MinerU PP-DocLayoutV2 only on first page analysis."""
     try:
-        from mineru.model.layout import LayoutModel
+        from mineru.model.layout.pp_doclayoutv2 import PPDocLayoutV2LayoutModel
+        from mineru.utils.enum_class import ModelPath
+        from mineru.utils.models_download_utils import (
+            auto_download_and_get_model_root_path,
+        )
     except ImportError as exc:
         raise EngineError(
             "MinerU layout requires the `mineru` package. Install it with "
             "`pip install -r requirements-mineru-ppocr.txt`."
         ) from exc
     try:
-        return LayoutModel(device=device)
+        import os
+
+        weight = os.path.join(
+            auto_download_and_get_model_root_path(ModelPath.pp_doclayout_v2),
+            ModelPath.pp_doclayout_v2,
+        )
+        return PPDocLayoutV2LayoutModel(weight, device)
     except Exception as exc:
         raise EngineError(
             "MinerU layout could not load its weights. Ensure the model files are "
@@ -38,12 +59,8 @@ def _load_mineru_layout_model(*, device: str) -> Any:
         ) from exc
 
 
-def _block_type(label: object) -> BlockType:
-    return _LABEL_MAP.get(str(label).lower(), BlockType.OTHER)
-
-
 class MineruLayoutEngine:
-    """Detect document blocks using MinerU's layout model."""
+    """Detect document blocks using MinerU's PP-DocLayoutV2 model."""
 
     def __init__(self, *, device: str = "cuda") -> None:
         self.device = device
@@ -56,7 +73,10 @@ class MineruLayoutEngine:
 
     def analyze(self, image_path: Path, page: int) -> list[LayoutBlock]:
         try:
-            detections = self._ensure_model().predict(str(image_path))
+            from PIL import Image
+
+            image = Image.open(image_path).convert("RGB")
+            detections = self._ensure_model().predict(image)
         except EngineError:
             raise
         except Exception as exc:
@@ -78,10 +98,7 @@ class MineruLayoutEngine:
                     order=len(blocks),
                     page=page,
                     image_path=image_path,
-                    meta={
-                        "label": str(label),
-                        "confidence": float(detection.get("score", 0.0)),
-                    },
+                    meta={"label": str(label)},
                 )
             )
         blocks.sort(key=lambda block: (block.bbox.y1, block.bbox.x1, block.order))

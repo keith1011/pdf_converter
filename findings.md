@@ -1,5 +1,33 @@
 # Findings & Decisions
 
+## 2026-07-23 — uv migrate (modern-python)
+- Source of truth: `pyproject.toml` + `uv.lock`; core deps via `uv add`; groups `dev`/`lint`/`test`/`got`.
+- Torch CUDA via pytorch-cu126 index (`2.13.0+cu126`, cuda True after re-pin).
+- MinerU **not** in main lock (Py3.14 + transformers 5 + fasttext MSVC) — keep `.venv-mineru312`.
+- `surya-ocr` still `uv pip install surya-ocr --no-deps` (not locked; uv sync removes it).
+- `uv run pytest`: **120 passed**.
+
+## Homelab Wave 1 blocker (2026-07-23)
+- A→B SSH: host key OK after `StrictHostKeyChecking=accept-new`; auth still **Permission denied** until B installs `Z:\backups\ssh-bootstrap\pc-a.pub` via `install-pc-a-key.sh`.
+- No `QDRANT_WRITER_KEY` / `WAVE1_SSH_PASSWORD` in User/Process env on A — ingest + reader neg-test wait on keys in `%USERPROFILE%\.homelab\qdrant.a.env` (generated) + B `apply-qdrant-env.sh`.
+- A-side RP pack works without SSH: `RP_ID=20260723T122750Z`, `DONE_count=1` in `jobs.tar.gz`.
+- Second job published: `Z:\jobs\20260723-130314-wave1demo` (`doc_id=wave1demo`, 8 segments) — ingest pending key rotation.
+- Follow-along path: `homelab/scripts/RUN_ON_B.md` + `wave1-on-b.sh`.
+
+## GPU smoke env (2026-07-23)
+- Main `.venv` is **Python 3.14** — no `paddlepaddle` wheel; experiment stacks need **Python 3.12** venvs (`.venv-engines312` for GOT, `.venv-mineru312` for MinerU).
+- Windows: `torch` CUDA + `paddlepaddle-gpu` **cannot coexist** (cuDNN DLL WinError 127). Use **paddle CPU** for PP-OCR text while DocLayout/GOT/MinerU use CUDA torch.
+- GOT: prefer HF-native `stepfun-ai/GOT-OCR-2.0-hf` (no `verovio`); DocLayout load via `hf_hub_download(...pt)` not broken `YOLOv10.from_pretrained`.
+- MinerU 3.4.x: needs `transformers<5` (`mineru[pipeline]`); PP-DocLayoutV2 + UniMERNet via `auto_download_and_get_model_root_path`.
+- PaddleOCR 3.x: use `predict()` + `rec_texts` (legacy `ocr(..., cls=True)` broken).
+- Limit-1 timings (log only): got-ppocr total **33.9s**; mineru-ppocr total **39.2s**. Quality not scored yet — draft Chinese/prose still rough under skip_polish.
+
+## 2026-07-23 — modern-python code check (no full uv migrate)
+- Tooling: light `pyproject.toml` + ruff in `.venv`; **no** `uv.lock` / ty / prek. Runtime still `requirements-*.txt` + multi-venv (3.14 Qwen, 3.12 GOT/MinerU).
+- Focused engines: ruff found 1 import-order issue (fixed) + 6 format diffs (formatted). pytest **11 passed** (then 9 after format scope).
+- Gaps vs modern-python ideal: not on `uv sync`/`uv run`; deps still requirements.txt; `ty` absent; Py3.14 default venv blocks Paddle.
+- Verdict: adapter smoke fixes are lint-clean enough to commit; full uv migration is a separate opt-in task.
+
 ## Landscape (office-hours 2026-07-22)
 - **L1:** Local RAG = Documents→embed→vector DB→retrieve→LLM; don’t expose vector DB to public net; Tailscale/VPN for remote.
 - **L2:** 2026 guides push **decouple** embedding / Qdrant / LLM to avoid GPU contention; Qdrant+Ollama compose is common; **DeepTutor** (HKUDS) is a full self-hosted AI-tutor+question-bank stack; multi-agent fails when two writers share Qdrant/files without ownership.

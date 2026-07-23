@@ -6,7 +6,9 @@ from ocr_pipeline.prompts import TEXT_ROUTER_PROMPT
 
 
 class VlmTextEngine:
-    def __init__(self, vlm, *, max_new_tokens: int | None = None, prompt: str | None = None) -> None:
+    def __init__(
+        self, vlm, *, max_new_tokens: int | None = None, prompt: str | None = None
+    ) -> None:
         self.vlm = vlm
         self.max_new_tokens = max_new_tokens
         self.prompt = prompt or TEXT_ROUTER_PROMPT

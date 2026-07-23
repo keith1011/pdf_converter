@@ -9,9 +9,7 @@ from ocr_pipeline.engines.unimernet_formula import UnimernetFormulaEngine
 def test_unimernet_formula_engine_loads_lazily_once(tmp_path, monkeypatch):
     class Model:
         def predict(self, formulas, image):
-            assert formulas == [
-                {"label": "display_formula", "bbox": [0, 0, 40, 20]}
-            ]
+            assert formulas == [{"label": "display_formula", "bbox": [0, 0, 40, 20]}]
             assert image.shape == (20, 40, 3)
             return [{"latex": "  x^2 + y^2  "}]
 
@@ -35,4 +33,4 @@ def test_unimernet_formula_engine_loads_lazily_once(tmp_path, monkeypatch):
     assert loaded == []
     assert engine.ocr(crop) == "x^2 + y^2"
     assert engine.ocr(crop) == "x^2 + y^2"
-    assert loaded == [{"model_id": "opendatalab/UniMERNet", "device": "cuda"}]
+    assert loaded == [{"device": "cuda"}]
