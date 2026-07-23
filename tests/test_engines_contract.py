@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from ocr_pipeline.engines.base import EngineError, FormulaEngine, LayoutEngine, TextEngine
+from ocr_pipeline.engines.timing import StageTimer
 from ocr_pipeline.models import BlockType, BBox, LayoutBlock
 
 
@@ -43,3 +45,12 @@ def test_engine_error_is_runtime_error():
     err = EngineError("missing paddleocr")
     assert isinstance(err, RuntimeError)
     assert "paddleocr" in str(err)
+
+
+def test_stage_timer_records_seconds():
+    t = StageTimer()
+    with t.section("layout"):
+        time.sleep(0.01)
+    d = t.as_dict()
+    assert d["layout"] >= 0.01
+    assert "total" in d
