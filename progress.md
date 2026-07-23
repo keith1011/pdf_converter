@@ -1,5 +1,10 @@
 # Progress Log
 
+## 2026-07-23 23:35 — Homelab Wave 1 committed; Python 3.12 pin
+- Commit `db664cf`: homelab Wave 1 scripts/ingest/DATA_PLANE, Cursor rules, handbooks, `.python-version`, `requires-python >=3.12,<3.13`
+- Commit `11638c9`: refresh `uv.lock` for 3.12-only markers; `uv sync` updated env
+- Confirmed `py -0p` has no 3.14; project `.venv` is 3.12.13
+
 ## 2026-07-23 23:26 — Homelab Wave 1 GREEN
 - SSH A→B OK (`id_ed25519_homeserver` / `keith@192.168.1.107`)
 - `ufw` ENABLED (`UFW_DONE` 2026-07-23T15:23:45Z); docs in `DATA_PLANE.md`
