@@ -7,7 +7,7 @@
 name = "pdf-scaner"
 version = "0.0.0"
 description = "P-ocr feedstock OCR pipeline (local tooling metadata)"
-requires-python = ">=3.11"
+requires-python = ">=3.12,<3.13"
 readme = "README.md"
 dependencies = [
     "accelerate>=0.33.0",
@@ -63,7 +63,7 @@ torchvision = { index = "pytorch-cu126" }
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 src = ["src", "tests"]
 extend-exclude = [
   ".venv",
@@ -111,7 +111,7 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.ty.environment]
-python-version = "3.11"
+python-version = "3.12"
 
 [tool.ty.terminal]
 error-on-warning = false

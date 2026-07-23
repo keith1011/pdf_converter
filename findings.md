@@ -7,7 +7,12 @@
 - `surya-ocr` still `uv pip install surya-ocr --no-deps` (not locked; uv sync removes it).
 - `uv run pytest`: **120 passed**.
 
-## Homelab Wave 1 blocker (2026-07-23)
+## Homelab Wave 1 (2026-07-23) — closed green
+- Root cause of SSH block: A pubkey not in B `authorized_keys` until `install-pc-a-key.sh`.
+- Backup script must hit `http://$B_LAN_IP:6333` (not loopback); download snapshots via REST, not `docker cp`.
+- Evidence: RP `20260723T152007Z`; points 835; reader upsert/delete 403; ufw ENABLED; Wave 2 deferred.
+
+## Homelab Wave 1 blocker (2026-07-23) — resolved
 - A→B SSH: host key OK after `StrictHostKeyChecking=accept-new`; auth still **Permission denied** until B installs `Z:\backups\ssh-bootstrap\pc-a.pub` via `install-pc-a-key.sh`.
 - No `QDRANT_WRITER_KEY` / `WAVE1_SSH_PASSWORD` in User/Process env on A — ingest + reader neg-test wait on keys in `%USERPROFILE%\.homelab\qdrant.a.env` (generated) + B `apply-qdrant-env.sh`.
 - A-side RP pack works without SSH: `RP_ID=20260723T122750Z`, `DONE_count=1` in `jobs.tar.gz`.

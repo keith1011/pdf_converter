@@ -4,7 +4,7 @@
 PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--check-compile` PDF；教師 ≤10 分鐘手改後可 reuse。
 
 ## Current Phase
-**modern-python uv migrate** — complete (`uv.lock` + groups); pytest 120 passed; commit pending user request (in progress).
+**Python 3.12 locked** — `.python-version`=3.12; `.venv` = CPython 3.12.13; `uv run pytest` 120 passed; torch cu126 + surya OK.
 
 ## Routing (locked)
 - Always: planning-with-files (`task_plan.md` / `findings.md` / `progress.md`)
@@ -15,6 +15,7 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | Item | Decision |
 |------|----------|
 | GPU | RTX 4070 Super **12GB** |
+| Python | **3.12** (`.python-version`; main `.venv` via uv). Do not use 3.14 for this repo. |
 | Default VLM | **Qwen2.5-VL-7B-Instruct 4bit** |
 | Decode | **greedy only** (`do_sample=False`) — sampling → CUDA multinomial assert |
 | Token budgets | Stage3 polish **2048**; Stage2 route **1024** (`max_new_tokens_route`) |
@@ -117,18 +118,16 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [x] Cursor MCP → B (`QDRANT_URL` + reader key + read-only); collections empty (fresh)
 - **Status:** Wave 0 complete
 
-### Phase H1: Homelab Wave 1 (Linux data plane finish) — in progress
+### Phase H1: Homelab Wave 1 (Linux data plane finish) — complete
 - [x] Repo scripts: `homelab/scripts/` (ufw, backup RP, restore drill, key apply, reader neg-test, wave1-on-b)
-- [x] Docs draft: `DATA_PLANE.md` firewall/backup/key checklist (Status not green until gates pass)
-- [x] A-side jobs RP `20260723T122750Z` + tar DONE check
-- [x] Second job published: `20260723-130314-wave1demo` (ingest pending)
-- [x] Rotated key material staged: `Z:\backups\wave1-scripts\qdrant.env.new` (not in git)
-- [ ] A→B SSH key auth (`install-pc-a-key.sh` on B)
-- [ ] B `ufw` + full RP (incl. Qdrant snapshot) via `wave1-on-b.sh`
-- [ ] Key rotate applied on B; A MCP/env + reader neg-test
-- [ ] Ingest `wave1demo` + idempotent re-ingest
-- [ ] Mark Wave 1 green; **Wave 2 stays closed**
-- **Status:** blocked on B one-time key install / `wave1-on-b.sh`
+- [x] `DATA_PLANE.md` firewall/backup/key checklist → **Wave 1 green**
+- [x] RP `20260723T152007Z` (jobs + full/collection Qdrant snapshots) + restore-drill PASS
+- [x] A→B SSH key auth (`id_ed25519_homeserver`)
+- [x] B `ufw` enabled (`UFW_DONE`); Qdrant/Samba scoped to A LAN
+- [x] Keys rotated; A MCP reader + User env writer; reader neg-test PASS (403)
+- [x] Docs: `123` (827) + `wave1demo` (8) = **835** points; re-ingest idempotent
+- [x] Wave 2 stays **closed**
+- **Status:** complete (2026-07-23)
 
 ### Phase 3: Qdrant ingest — after H0 green (was optional-parallel)
 
@@ -162,5 +161,5 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 ## Next Action
 1. Commit Phase 2.8 when user asks (tokens + layout artifact + lock + tests)
 2. Optional: full OCR re-run with `--reuse-layout` after one layout write / new TABLE_ROUTER
-3. Homelab follow-ups still uncommitted under `homelab/`
-4. Rotate Qdrant writer key when convenient
+3. Homelab Wave 1 green — do **not** start Wave 2 until explicitly requested
+4. Reload Cursor MCP after key rotate (if qdrant-find fails auth)

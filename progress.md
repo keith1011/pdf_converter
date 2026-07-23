@@ -1,5 +1,17 @@
 # Progress Log
 
+## 2026-07-23 23:26 — Homelab Wave 1 GREEN
+- SSH A→B OK (`id_ed25519_homeserver` / `keith@192.168.1.107`)
+- `ufw` ENABLED (`UFW_DONE` 2026-07-23T15:23:45Z); docs in `DATA_PLANE.md`
+- RP `20260723T152007Z`: jobs tar (2 DONE) + full+collection snapshots; restore-drill PASS
+- Keys rotated on B; A MCP reader synced; `reader_neg_test.py` PASS (reader 403 / writer OK)
+- Ingest `wave1demo` 8/8 + idempotent re-ingest; collection **835** points (`123`=827, `wave1demo`=8)
+- Wave 2 not started
+
+## 2026-07-23 — Python 3.12 as project standard
+- `.python-version` → 3.12; `requires-python = ">=3.12,<3.13"`.
+- Verified: py 3.12.13, torch 2.13.0+cu126 cuda=True, surya import OK, `uv run pytest` **120 passed**.
+
 ## 2026-07-23 — modern-python uv migrate + pytest
 - Migrated install path to `uv sync` / `uv run`; committed adapter smoke fixes with lockfile.
 - `uv run pytest`: 120 passed. Ruff engines clean. MinerU stays in `.venv-mineru312`.
