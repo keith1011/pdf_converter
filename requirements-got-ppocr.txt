@@ -1,0 +1,11 @@
+# GOT-OCR 2.0 + DocLayout-YOLO + PP-OCR experiment.
+#
+# Install a CUDA-compatible paddlepaddle-gpu wheel separately, then:
+#   pip install -r requirements-got-ppocr.txt
+# Model weights are fetched lazily on first use:
+#   juliozhao/DocLayout-YOLO-DocStructBench
+#   stepfun-ai/GOT-OCR2_0
+doclayout-yolo
+transformers
+accelerate
+paddleocr

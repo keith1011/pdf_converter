@@ -8,6 +8,8 @@ import yaml
 
 from .assemble import DraftAssembler, FinalPolisher
 from .engines.base import EngineError
+from .engines.doclayout_yolo import DocLayoutYoloEngine
+from .engines.got_formula import GotFormulaEngine
 from .engines.ppocr_text import PpocrTextEngine
 from .engines.surya_layout import SuryaLayoutEngine
 from .engines.vlm_formula import VlmFormulaEngine
@@ -43,11 +45,11 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     layout_name = str(engines_cfg.get("layout", "surya")).lower()
     text_name = str(engines_cfg.get("text", "vlm")).lower()
     formula_name = str(engines_cfg.get("formula", "vlm")).lower()
-    if layout_name != "surya":
+    if layout_name not in {"surya", "doclayout_yolo"}:
         raise EngineError(f"Unknown layout engine: {layout_name}")
     if text_name not in {"vlm", "ppocr"}:
         raise EngineError(f"Unknown text engine: {text_name}")
-    if formula_name != "vlm":
+    if formula_name not in {"vlm", "got"}:
         raise EngineError(f"Unknown formula engine: {formula_name}")
 
     layout = LayoutAnalyzer(
@@ -55,10 +57,12 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         device=str(layout_cfg.get("device", "cuda")),
         force_backend=str(layout_cfg.get("force_backend", "")),
     )
-    math = MathRouter(
-        formula_engine=VlmFormulaEngine(vlm, max_new_tokens=route_tokens),
-        max_new_tokens=route_tokens,
+    formula_engine = (
+        GotFormulaEngine()
+        if formula_name == "got"
+        else VlmFormulaEngine(vlm, max_new_tokens=route_tokens)
     )
+    math = MathRouter(formula_engine=formula_engine, max_new_tokens=route_tokens)
     if text_name == "ppocr":
         text_engine = PpocrTextEngine()
         table_engine = PpocrTextEngine()
@@ -78,7 +82,11 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
 
     return PipelineManager(
         layout=layout,
-        layout_engine=SuryaLayoutEngine(layout),
+        layout_engine=(
+            DocLayoutYoloEngine(device=str(layout_cfg.get("device", "cuda")))
+            if layout_name == "doclayout_yolo"
+            else SuryaLayoutEngine(layout)
+        ),
         router=router,
         assembler=DraftAssembler(),
         polisher=FinalPolisher(vlm),
