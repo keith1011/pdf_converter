@@ -67,6 +67,13 @@ Contract: `homelab/DATA_PLANE.md` + design `DONE.json` schema.
 
 ## 3. Current status (OCR feedstock + data plane)
 
+### OCR engine comparison
+
+- Spec: `docs/superpowers/specs/2026-07-23-ocr-engine-adapters-design.md`
+- Plan: `docs/superpowers/plans/2026-07-23-ocr-engine-adapters.md`
+- Scorecard: `docs/superpowers/evals/p-ocr-branch-scorecard.md`
+- Branches: `qwen-vl`, `got-ppocr`, `mineru-ppocr`
+
 ### Green
 
 | Area | Evidence |

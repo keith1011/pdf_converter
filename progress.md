@@ -1,9 +1,15 @@
 # Progress Log
 
+## 2026-07-23 — Task 10 P-ocr branch comparison scorecard
+- Added `docs/superpowers/evals/p-ocr-branch-scorecard.md` for `qwen-vl`, `got-ppocr`, and `mineru-ppocr`.
+- Scored columns are formula edits, prose edit minutes, and compile; `layout_s`, `text_s`, `formula_s`, and `total_s` are logged only, never ranking weight.
+- References: spec `docs/superpowers/specs/2026-07-23-ocr-engine-adapters-design.md`; plan `docs/superpowers/plans/2026-07-23-ocr-engine-adapters.md`.
+
 ## 2026-07-23 — Task 8 MinerU + UniMERNet experiment
 - Added lazy, fail-loud `MineruLayoutEngine` and `UnimernetFormulaEngine`; the formula adapter represents its crop as one full-image display-formula region for MinerU's current UniMERNet API.
 - Factory accepts `layout: mineru` and `formula: unimernet`; PP-OCR is reused for text/table routing and the default Surya/VLM configuration is unchanged.
-- Added mocked CPU layout, formula, and factory tests plus `requirements-mineru-ppocr.txt`. The focused pytest command returned no shell exit status, so its result is not asserted; no GPU models were downloaded.
+- Added mocked CPU layout, formula, and factory tests plus `requirements-mineru-ppocr.txt`. Focused CPU pytest: **10 passed**; no GPU models were downloaded.
+- Main source package committed as `87801bf`; config-only branch `mineru-ppocr` committed as `85a8576`, then workspace returned to `main`.
 
 ## 2026-07-23 — Task 7 GOT + DocLayout-YOLO experiment
 - Added lazy `DocLayoutYoloEngine` and `GotFormulaEngine`; both convert missing dependencies, unavailable weights, and runtime failures into explicit `EngineError` values with no Qwen fallback.

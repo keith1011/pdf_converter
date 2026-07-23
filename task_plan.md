@@ -70,12 +70,19 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [x] Create `got-ppocr` branch configuration and commit
 - [ ] GPU smoke skipped: DocLayout-YOLO and PaddleOCR are not installed
 
-### Task 8: MinerU + UniMERNet experiment — in progress
+### Task 8: MinerU + UniMERNet experiment — complete with concerns
 - [x] Add lazy, fail-loud MinerU `LayoutEngine` and UniMERNet `FormulaEngine`
 - [x] Wire `mineru` / `unimernet` factory selections; retain Surya/VLM defaults
 - [x] Add CPU-only mocked adapter and factory tests
-- [ ] Run focused CPU tests and commit source package on `main`
-- [ ] Create `mineru-ppocr` config branch, commit it, then return to `main`
+- [x] Commit source package on `main` (`87801bf`)
+- [x] Create and commit `mineru-ppocr` config branch (`85a8576`), then return to `main`
+- [x] Focused CPU pytest: 10 passed
+- [ ] GPU smoke skipped because no cached optional models
+
+### Task 10: P-ocr branch comparison scorecard — complete
+- [x] Scorecard: `docs/superpowers/evals/p-ocr-branch-scorecard.md`
+- [x] References: spec `docs/superpowers/specs/2026-07-23-ocr-engine-adapters-design.md`; plan `docs/superpowers/plans/2026-07-23-ocr-engine-adapters.md`
+- [x] Comparison branches: `qwen-vl`, `got-ppocr`, `mineru-ppocr`; score formula edits, prose editing time, and compile only (timings logged only)
 
 | Error | Resolution |
 |-------|------------|
@@ -86,6 +93,7 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | PowerShell rejected the Bash-style `&&` in a diff validation command. | Ran the validation command separately using PowerShell-compatible execution. |
 | The Windows WSL `bash` shim has no `/bin/bash`, so the required Bash heredoc commit form cannot run. | Use PowerShell's native multiline string to pass the same one-line commit message. |
 | Task 8 focused pytest invocation returned no shell exit status. | Record the terminal limitation; do not claim the CPU suite passed without an explicit result. |
+| Task 10 status/diff/log shell checks returned no exit status. | Record the limitation; inspect edited files directly and retry only the scoped staging/commit command. |
 
 ### Phase 2.5b: LayoutArtifact resume — complete (via 2.8)
 - [x] Persist LayoutBlock JSON; resume route/polish without re-Surya
