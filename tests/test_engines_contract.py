@@ -4,7 +4,10 @@ import time
 from pathlib import Path
 
 from ocr_pipeline.engines.base import EngineError, FormulaEngine, LayoutEngine, TextEngine
+from ocr_pipeline.engines.surya_layout import SuryaLayoutEngine
 from ocr_pipeline.engines.timing import StageTimer
+from ocr_pipeline.engines.vlm_formula import VlmFormulaEngine
+from ocr_pipeline.engines.vlm_text import VlmTextEngine
 from ocr_pipeline.models import BlockType, BBox, LayoutBlock
 
 
@@ -54,3 +57,32 @@ def test_stage_timer_records_seconds():
     d = t.as_dict()
     assert d["layout"] >= 0.01
     assert "total" in d
+
+
+def test_surya_layout_engine_delegates(tmp_path):
+    calls = {}
+
+    class FakeAnalyzer:
+        def analyze_page(self, image_path, page):
+            calls["page"] = page
+            return []
+
+        def release(self):
+            calls["released"] = True
+
+    eng = SuryaLayoutEngine(FakeAnalyzer())
+    img = tmp_path / "p.png"
+    img.write_bytes(b"x")
+    assert eng.analyze(img, 1) == []
+    eng.release()
+    assert calls["released"] is True
+
+
+def test_vlm_text_engine_calls_generate(tmp_path):
+    class FakeVlm:
+        def generate(self, prompt, image_path=None, *, max_new_tokens=None):
+            return "正文"
+
+    crop = tmp_path / "c.png"
+    crop.write_bytes(b"x")
+    assert VlmTextEngine(FakeVlm()).ocr(crop) == "正文"
