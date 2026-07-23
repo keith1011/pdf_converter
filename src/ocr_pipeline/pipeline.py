@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from contextlib import nullcontext
 from pathlib import Path
 
 from .assemble import DraftAssembler, FinalPolisher
@@ -10,27 +11,14 @@ from .cli_report import WarnCollector, print_stage3_start
 from .content_first import finalize_content_first
 from .latex_math import sanitize_tex_document
 from .layout import LayoutAnalyzer
+from .layout_artifact import (
+    layout_artifact_path,
+    load_layout_artifact,
+    save_layout_artifact,
+)
 from .models import BBox, PageResult, PipelineResult
+from .pipeline_lock import DEFAULT_LOCK_NAME, PipelineLock
 from .routers import DynamicRouter
-
-# Auto per-page polish thresholds (12GB VRAM — full-doc Stage3 OOMs on long drafts)
-_AUTO_PER_PAGE_MIN_PAGES = 3
-_AUTO_PER_PAGE_MIN_CHARS = 12_000
-
-
-def decide_polish_per_page(
-    *,
-    page_count: int,
-    draft_chars: int,
-    requested: bool,
-) -> bool:
-    """
-    Content-first Stage3 always polishes each page independently.
-
-    This guarantees that every PageResult receives the polished txt/tex used
-    to build PageIR. The arguments remain for CLI/API compatibility.
-    """
-    return True
 
 
 class PipelineManager:
@@ -60,17 +48,51 @@ class PipelineManager:
         pdf_path: Path,
         *,
         limit: int = 0,
-        polish_per_page: bool = False,
+        polish_per_page: bool = False,  # noqa: ARG002 — kept for CLI compat; always per-page
         overwrite: bool = True,
+        reuse_layout: bool = False,
+        single_instance_lock: bool = True,
         warns: WarnCollector | None = None,
     ) -> PipelineResult:
         """
         Order on 12GB VRAM:
           layout all pages → release Surya → route (VLM) → polish (VLM)
+
+        Content-first always polishes each page (``polish_per_page`` is ignored).
+
+        When ``reuse_layout`` is True, load ``data/pdf_pages/<stem>/layout.json``
+        and skip Surya (still needs page PNGs).
         """
         warns = warns or WarnCollector()
         source = self._safe_stem(pdf_path)
         page_dir = self.pages_dir / source
+        lock_cm = (
+            PipelineLock(self.output_dir / DEFAULT_LOCK_NAME)
+            if single_instance_lock
+            else nullcontext()
+        )
+        with lock_cm:
+            return self._run_unlocked(
+                pdf_path,
+                source=source,
+                page_dir=page_dir,
+                limit=limit,
+                overwrite=overwrite,
+                reuse_layout=reuse_layout,
+                warns=warns,
+            )
+
+    def _run_unlocked(
+        self,
+        pdf_path: Path,
+        *,
+        source: str,
+        page_dir: Path,
+        limit: int,
+        overwrite: bool,
+        reuse_layout: bool,
+        warns: WarnCollector,
+    ) -> PipelineResult:
         print("=== Stage1: PDF -> images ===")
         if page_dir.exists() and any(page_dir.glob("page_*.png")) and not overwrite:
             images = sorted(page_dir.glob("page_*.png"))
@@ -80,22 +102,49 @@ class PipelineManager:
         if limit > 0:
             images = images[:limit]
 
-        # --- Stage1 layout only (hold Surya) ---
+        artifact = layout_artifact_path(page_dir)
         pages: list[PageResult] = []
-        for image_path in images:
-            m = re.search(r"(\d+)", image_path.stem)
-            page = int(m.group(1)) if m else len(pages) + 1
-            print(f"\n=== Stage1 layout page {page}: {image_path} ===")
-            blocks = self.layout.analyze_page(image_path, page)
-            if getattr(self.layout, "_backend", None) == "fullpage":
-                warns.add("layout fullpage fallback (not golden)")
-            print(f"  blocks={len(blocks)}")
-            pages.append(
-                PageResult(page=page, image_path=image_path, blocks=blocks, draft="")
-            )
 
-        # Free layout VRAM before any VLM load (ACCESS_VIOLATION risk on 12GB otherwise)
-        self.layout.release()
+        if reuse_layout:
+            if not artifact.exists():
+                raise FileNotFoundError(
+                    f"--reuse-layout requires {artifact}. Run once without the flag first."
+                )
+            print(f"=== Stage1 layout: reusing {artifact} ===")
+            pages = load_layout_artifact(artifact)
+            if limit > 0:
+                pages = pages[:limit]
+            # Remap image paths to current page_dir if PNGs were moved
+            by_stem = {p.name: p for p in images}
+            for pr in pages:
+                name = Path(pr.image_path).name
+                if name in by_stem:
+                    pr.image_path = by_stem[name]
+                    for b in pr.blocks:
+                        b.image_path = pr.image_path
+            # Skip Surya entirely — nothing to release, but call release for safety
+            self.layout.release()
+        else:
+            # --- Stage1 layout only (hold Surya) ---
+            for image_path in images:
+                m = re.search(r"(\d+)", image_path.stem)
+                page = int(m.group(1)) if m else len(pages) + 1
+                print(f"\n=== Stage1 layout page {page}: {image_path} ===")
+                blocks = self.layout.analyze_page(image_path, page)
+                if getattr(self.layout, "_backend", None) == "fullpage":
+                    warns.add("layout fullpage fallback (not golden)")
+                print(f"  blocks={len(blocks)}")
+                pages.append(
+                    PageResult(page=page, image_path=image_path, blocks=blocks, draft="")
+                )
+
+            save_layout_artifact(
+                artifact, source=source, pdf_path=pdf_path, pages=pages
+            )
+            print(f"[Layout] Wrote artifact: {artifact}")
+
+            # Free layout VRAM before any VLM load (ACCESS_VIOLATION risk on 12GB otherwise)
+            self.layout.release()
 
         # --- Stage2 route (VLM) ---
         for pr in pages:
@@ -104,43 +153,16 @@ class PipelineManager:
             pr.draft = self.assembler.stitch(pr.blocks)
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        txt_path = self.output_dir / f"{source}.txt"
-        tex_path = self.output_dir / f"{source}.tex"
 
-        combined_draft = "\n\n".join(p.draft for p in pages if p.draft.strip())
-        if (
-            not polish_per_page
-            and (
-                len(pages) >= _AUTO_PER_PAGE_MIN_PAGES
-                or len(combined_draft) >= _AUTO_PER_PAGE_MIN_CHARS
-            )
-        ):
-            warns.add(
-                f"auto polish_per_page (pages={len(pages)}, draft_chars={len(combined_draft)})"
-            )
-            print(
-                f"WARN: auto polish_per_page "
-                f"(pages={len(pages)}, draft_chars={len(combined_draft)})"
-            )
-
-        txt_parts: list[str] = []
-        body_parts: list[str] = []
+        # Content-first: always polish each page independently for PageIR.
         print_stage3_start()  # DR2: once, then quiet across pages
         for pr in pages:
             t, x, pw = self.polisher.polish(pr.draft)
             for w in pw:
                 warns.add(w)
             pr.txt, pr.tex = t, x
-            txt_parts.append(t)
-            body_parts.append(self.polisher.extract_tex_body(x))
-        full_txt = "\n\n".join(txt_parts)
-        full_tex = sanitize_tex_document(
-            self.polisher.wrap_tex("\n\n".join(body_parts))
-        )
         draft = "\n\n".join(p.draft for p in pages)
 
-        # Content-first Ship 1: segment → integrity → render → pageir.json
-        # Prefer polished tex body per page; txt/draft are defensive fallbacks.
         page_drafts: list[tuple[int, str, BBox]] = []
         for pr in pages:
             if pr.tex:

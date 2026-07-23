@@ -1,4 +1,4 @@
-"""Local GLM-4.6V-Flash client (shared by TextRouter + FinalPolisher)."""
+"""Local GLM-4.6V-Flash client (optional VlmClient backend)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import torch
 
-from .vlm_client import build_generation_kwargs
+from .vlm_client import run_vlm_generate
 
 
 class Glm46VFlashClient:
@@ -17,7 +17,7 @@ class Glm46VFlashClient:
         model_name: str = "zai-org/GLM-4.6V-Flash",
         *,
         load_in_4bit: bool = True,
-        max_new_tokens: int = 4096,
+        max_new_tokens: int = 2048,
         temperature: float = 0.0,
         max_pixels: int = 1003520,
     ):
@@ -62,89 +62,22 @@ class Glm46VFlashClient:
             )
         self.model.eval()
 
-    @staticmethod
-    def _resize(image, max_pixels: int):
-        w, h = image.size
-        pixels = w * h
-        if max_pixels > 0 and pixels > max_pixels:
-            scale = (max_pixels / float(pixels)) ** 0.5
-            image = image.resize((max(1, int(w * scale)), max(1, int(h * scale))))
-        return image
-
-    def generate(self, prompt: str, image_path: Path | None = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        image_path: Path | None = None,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> str:
         self.load()
         assert self.model is not None and self.processor is not None
-
-        content: list[dict] = []
-        pil_image = None
-        if image_path is not None:
-            from PIL import Image
-
-            with Image.open(image_path) as im:
-                pil_image = im.convert("RGB")
-                pil_image.load()
-            pil_image = self._resize(pil_image, self.max_pixels)
-            content.append({"type": "image", "image": pil_image})
-        content.append({"type": "text", "text": prompt})
-
-        messages = [{"role": "user", "content": content}]
-
-        try:
-            inputs = self.processor.apply_chat_template(
-                messages,
-                tokenize=True,
-                add_generation_prompt=True,
-                return_dict=True,
-                return_tensors="pt",
-            )
-        except Exception:
-            # Text-only or legacy path
-            if pil_image is None:
-                text = self.processor.apply_chat_template(
-                    [{"role": "user", "content": prompt}],
-                    tokenize=False,
-                    add_generation_prompt=True,
-                )
-                inputs = self.processor(text=[text], return_tensors="pt")
-            else:
-                legacy = [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "image"},
-                            {"type": "text", "text": prompt},
-                        ],
-                    }
-                ]
-                text = self.processor.apply_chat_template(
-                    legacy, tokenize=False, add_generation_prompt=True
-                )
-                inputs = self.processor(
-                    text=[text], images=[pil_image], padding=True, return_tensors="pt"
-                )
-
-        inputs = inputs.to(self.model.device)
-        inputs.pop("token_type_ids", None)
-
-        gen_kwargs = build_generation_kwargs(
-            max_new_tokens=self.max_new_tokens,
+        token_budget = self.max_new_tokens if max_new_tokens is None else int(max_new_tokens)
+        return run_vlm_generate(
+            model=self.model,
+            processor=self.processor,
+            prompt=prompt,
+            image_path=image_path,
+            max_pixels=self.max_pixels,
+            max_new_tokens=token_budget,
             temperature=self.temperature,
         )
-
-        with torch.inference_mode():
-            generated = self.model.generate(**inputs, **gen_kwargs)
-        trimmed = generated[:, inputs["input_ids"].shape[1] :]
-        out = self.processor.batch_decode(
-            trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
-        text = (out[0] if out else "").strip()
-        if text.startswith("```"):
-            import re
-
-            text = re.sub(r"^```(?:\w+)?\s*", "", text)
-            text = re.sub(r"\s*```$", "", text)
-        text = text.strip()
-        del inputs, generated, trimmed
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        return text

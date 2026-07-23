@@ -10,7 +10,6 @@ from pathlib import Path
 
 from .models import BBox, BlockType, LayoutBlock
 
-
 _LABEL_MAP = {
     "text": BlockType.TEXT,
     "sectionheader": BlockType.TITLE,
@@ -216,9 +215,9 @@ class LayoutAnalyzer:
             from surya.layout import batch_layout_detection
             from surya.model.layout.model import load_model as load_layout_model
             from surya.model.layout.processor import load_processor as load_layout_processor
-            from surya.ordering import batch_ordering
             from surya.model.ordering.model import load_model as load_order_model
             from surya.model.ordering.processor import load_processor as load_order_processor
+            from surya.ordering import batch_ordering
 
             print("[Surya] Using legacy layout + ordering")
             self._layout_predictor = {

@@ -33,7 +33,7 @@ class BBox:
             y2 = y1 + 1
         return x1, y1, x2, y2
 
-    def clamp(self, width: int, height: int) -> "BBox":
+    def clamp(self, width: int, height: int) -> BBox:
         return BBox(
             x1=max(0, min(self.x1, width - 1)),
             y1=max(0, min(self.y1, height - 1)),

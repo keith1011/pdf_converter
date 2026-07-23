@@ -53,13 +53,62 @@
 |-----|------|
 | `dbd2e02` | Content-first Ship 1 |
 | `365c186` | Ship 1.5 `--check-compile` |
-| *(pending)* | Greedy decode + Surya docker release |
+| `e6bcca7` | Greedy decode + Surya docker release + tabular compile defenses |
+| *(pending)* | Phase 2.8 speed: tokens + LayoutArtifact + single-instance lock |
 
-## Uncommitted (as of 2026-07-22 monitor)
-- `src/ocr_pipeline/vlm_client.py`, `glm_client.py`, `layout.py`
-- `config/ocr_pipeline.yaml` temperature 0
-- `tests/test_vlm_greedy_decode.py`, `tests/test_layout_release.py`
-- Phantom/OneDrive noise may still show on other files — prefer content diffs
+## Phase 2.8 speed (2026-07-23)
+
+Evidence: full golden `output/123.tex` ~15KB; Stage1 often 2–3 blocks/page — 4096 tokens wasted decode budget.
+
+| Change | Detail |
+|--------|--------|
+| Token budgets | `max_new_tokens: 2048` (Stage3 polish default); `max_new_tokens_route: 1024` (Stage2 crops) |
+| API | `VlmClient.generate(..., max_new_tokens=)` override; routers pass route budget |
+| LayoutArtifact | `data/pdf_pages/<stem>/layout.json` written after Surya; `--reuse-layout` skips Surya |
+| Dual-run guard | `output/.ocr_pipeline.lock` + live PID; `--allow-concurrent` to override |
+
+If Stage3 starts warning `polish truncated`, raise `vlm.max_new_tokens` before touching route budget.
+
+## Uncommitted (as of 2026-07-23 Phase 2.8)
+- Phase 2.8 code + tests + planning docs (not committed yet)
+- `homelab/`, `.cursor/`, phantom OneDrive M files, pytest/golden artifacts
+
+## modern-python review (2026-07-23) — Phase 2.8 / ocr_pipeline
+
+Scope: usage freshness & complexity (not a full uv migration). Runtime: **CPython 3.14.6**; `uv` installed globally but project still **requirements.txt + `.venv` + `PYTHONPATH=src`** (no `pyproject.toml`, no ruff/ty in venv).
+
+### Already modern (keep)
+
+| Pattern | Where |
+|---------|--------|
+| `X \| Y` unions, `list[T]`, `dict` | almost all modules |
+| `from __future__ import annotations` | package-wide |
+| `pathlib.Path`, keyword-only `*` | pipeline / artifact / lock / routers |
+| `Protocol` + dataclasses / Enum | `vlm_client`, `models` |
+| `Path.unlink(missing_ok=True)` | `pipeline_lock` |
+
+### Over-complex or stale *usage* (code smell, not “wrong API”)
+
+| Item | Verdict | Note |
+|------|---------|------|
+| `Qwen25VlClient.generate` ≈ `Glm46VFlashClient.generate` + dual `_resize` | **繁雜** | ~80 行重複；可抽 shared helper，非語法過時 |
+| `decide_polish_per_page` always `True` | **死 API** | 相容用，可刪或標 deprecated |
+| `pipeline_lock` PID + `tasklist` fallback | **略繁** | 合理無新依賴；若允許依賴可用 `filelock`。`atexit` + 手動 `acquire/finally` 雙軌，pipeline 沒用 `with` |
+| `layout_artifact` 手寫 dict | **可接受** | 比 `asdict` 可控；`if not b.image_path` 近乎死碼（Path 幾乎總 truthy） |
+| 大量 `print` / bare `except Exception` | **CLI 現實** | ruff T20/BLE 會吵；研發 CLI 可 ignore，不必為「現代」改 logging |
+| `factory`/`load_ocr_config` → bare `dict` | **鬆** | 可之後 TypedDict；非阻塞 |
+
+### Tooling vs modern-python skill（專案級，非單一 .py）
+
+- Skill 預設：`uv` + `pyproject.toml` + ruff + ty + `uv run`
+- 現況：`requirements-ocr-pipeline.txt` + 手動 venv — **工具鏈偏舊**，但應用碼語法已偏新
+- **不建議**現在為 Phase 2.8 整包搬 uv（風險高、與 CUDA/torch 鎖版衝突）；若要現代化，單獨開「tooling」任務
+
+### 建議優先級（若要動刀）
+
+1. P2：抽 VLM `generate`/`_resize` 共用，減繁雜  
+2. P3：清 `decide_polish_per_page` 死分支；layout 死碼註解  
+3. Backlog：`pyproject.toml` + ruff（不強制換掉現有 `.venv` 跑 GPU）
 
 ## Resources
 - Content-first design: `~/.gstack/projects/pdf-scaner/a1217-main-design-20260721-153800.md`
@@ -103,3 +152,10 @@ User list (15 URLs; `arxiv-latex-mcp` duplicated → 14 unique). Compared agains
 - **Now:** context7, zero-api-key-web-search, codebase-memory-mcp, gpu-mcp-server; keep user-qdrant read-only.
 - **When needed:** arxiv-latex-mcp, zotero-mcp, mcp-pandoc.
 - **Skip/defer:** filesystem, fetch, chroma, cognee, mengram, jupyter-notebook-mcp, knowlyr-sandbox, archived github.
+
+## modern-python cleanup applied (2026-07-23)
+
+Executed in order after review:
+1. **Shared VLM path** — `run_vlm_generate` / `resize_image` / `strip_fences` in `vlm_client.py`; `Glm46VFlashClient.generate` delegates
+2. **Dead API** — removed `decide_polish_per_page` + auto polish warn; always per-page polish; `--polish-per-page` deprecated no-op; `PipelineLock` context-manager only
+3. **Light ruff** — `pyproject.toml` + `requirements-dev.txt`; install with `uv pip install -p .venv ruff` (GPU requirements.txt kept); `ruff check src/ocr_pipeline run_ocr_pipeline.py arrange_only.py tests` clean

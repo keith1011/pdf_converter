@@ -266,9 +266,9 @@ def _is_tabular_chrome_body(text: str) -> bool:
     # Model sometimes emits a mid-body \end{document} / empty \caption
     if re.fullmatch(r"\\(?:begin|end)\{document\}", t, flags=re.IGNORECASE):
         return True
-    if re.fullmatch(r"\\caption(?:\[[^\]]*\])?\{[^}]*\}", t, flags=re.IGNORECASE):
-        return True
-    return False
+    return bool(
+        re.fullmatch(r"\\caption(?:\[[^\]]*\])?\{[^}]*\}", t, flags=re.IGNORECASE)
+    )
 
 
 def _strip_orphan_dollars(text: str) -> str:

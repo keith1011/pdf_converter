@@ -115,14 +115,29 @@
 - limit-2 / full2 golden history in git/logs
 
 ## Next
-1. Optional: full 14-page OCR re-run with new TABLE_ROUTER + `--check-compile`
-2. Phase 2.8 speed (tokens / LayoutArtifact resume)
+1. Commit Phase 2.8 + modern-python cleanup when asked
+2. Optional: full 14-page OCR re-run with new TABLE_ROUTER + `--check-compile`
 3. Homelab follow-ups (still uncommitted under `homelab/`)
+
+## 2026-07-23 — modern-python cleanup (ordered)
+1. Shared `run_vlm_generate` / `resize_image` / `strip_fences` in `vlm_client.py`; GLM delegates
+2. Removed `decide_polish_per_page` + auto-warn dead path; CLI `--polish-per-page` deprecated no-op; lock uses `with` (no atexit)
+3. Light tooling: `pyproject.toml` (ruff only) + `requirements-dev.txt`; `uv pip install -p .venv ruff`; `ruff check src/ocr_pipeline …` clean; 26 related tests passed
+- Did **not** migrate torch stack to uv / delete requirements-ocr-pipeline.txt
+
+## 2026-07-23 — Phase 2.8 speed implemented
+- Config: `vlm.max_new_tokens: 2048`, `max_new_tokens_route: 1024`; factory wires route budgets into Math/Text routers
+- `generate(..., max_new_tokens=)` override on Qwen + GLM clients
+- LayoutArtifact: `layout_artifact.py` → `data/pdf_pages/<stem>/layout.json`; CLI `--reuse-layout`
+- Single-instance: `pipeline_lock.py` + `output/.ocr_pipeline.lock`; CLI `--allow-concurrent`
+- Tests: `test_layout_artifact`, `test_pipeline_lock`, greedy/factory token defaults, CLI flags — 16 passed in subset
+- Not committed yet (await user)
 
 ## 2026-07-23 — Commit greedy / VRAM / TABLE_ROUTER package
 - Scoped commit: greedy decode, `layout.release` docker stop, TABLE_ROUTER linear + segmenter/integrity/content-first defenses, `temperature: 0.0`, related tests, planning docs + `handoff.md`
 - Excluded: OneDrive phantom M files (empty numstat), `homelab/`, pytest/golden report artifacts, `.cursor/`
 - User chose priority 1 from handoff next-actions
+- Landed as `e6bcca7`
 
 ## 2026-07-23 — MCP overlap check (pre-install)
 - Reviewed 14 unique MCP candidates vs existing Qdrant on B.

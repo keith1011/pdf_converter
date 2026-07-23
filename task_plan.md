@@ -4,7 +4,7 @@
 PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--check-compile` PDF；教師 ≤10 分鐘手改後可 reuse。
 
 ## Current Phase
-**Phase 2.6–2.7 committed** — greedy/VRAM + tabular compile defenses landed; next: optional full OCR re-run or Phase 2.8 speed
+**Phase 2.8 + modern-python cleanup done (uncommitted)** — tokens/LayoutArtifact/lock + shared VLM generate + ruff tooling; commit when user asks
 
 ## Hardware / model
 
@@ -13,6 +13,7 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | GPU | RTX 4070 Super **12GB** |
 | Default VLM | **Qwen2.5-VL-7B-Instruct 4bit** |
 | Decode | **greedy only** (`do_sample=False`) — sampling → CUDA multinomial assert |
+| Token budgets | Stage3 polish **2048**; Stage2 route **1024** (`max_new_tokens_route`) |
 | Surya v2 | Docker/vLLM OK for layout；**`release()` must `docker stop surya-vllm-*`** before VLM |
 | Order | Layout → **stop vLLM** → Stage2/3 Qwen → content-first finalize → optional compile |
 
@@ -44,13 +45,16 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [ ] Optional: full OCR re-run with new TABLE_ROUTER (confirm Stage2 also linear)
 - **Status:** compile path green on repaired drafts
 
-### Phase 2.8: Runtime speed — pending
-- [ ] Lower Stage2/3 `max_new_tokens`; LayoutArtifact resume; avoid dual pipeline runs
-- **Status:** deferred after compile green
+### Phase 2.8: Runtime speed — complete (code; commit pending)
+- [x] Lower Stage2/3 `max_new_tokens` (polish 2048 / route 1024) + `generate(..., max_new_tokens=)`
+- [x] LayoutArtifact persist/resume (`layout.json` + `--reuse-layout`) — folds Phase 2.5b
+- [x] Single-instance lock (`output/.ocr_pipeline.lock`; `--allow-concurrent` escape)
+- [ ] Commit Phase 2.8 package when user asks
+- **Status:** functionally complete; uncommitted
 
-### Phase 2.5b: LayoutArtifact resume — pending
-- [ ] Persist LayoutBlock JSON; resume route/polish
-- **Status:** pending
+### Phase 2.5b: LayoutArtifact resume — complete (via 2.8)
+- [x] Persist LayoutBlock JSON; resume route/polish without re-Surya
+- **Status:** complete (see Phase 2.8)
 
 ### Phase Ship 2: OCR overlay PDF — pending
 
@@ -79,6 +83,9 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | planning-with-files always on | User 2026-07-22; project rule `.cursor/rules/planning-with-files.mdc` |
 | Dual-PC Approach B data plane | ≥2mo foundation; Qdrant/jobs on B; Cursor on A via RustDesk |
 | **B OS = Ubuntu Server 24.04 LTS**（退路 Debian 12） | Best docs; Debian if Ubuntu storage probing crashes |
+| Stage3 tokens 2048 / Stage2 route 1024 | Full `123.tex` ~15KB; crops rarely need 4k; raise if polish truncates |
+| LayoutArtifact beside page PNGs | `data/pdf_pages/<stem>/layout.json`; `--reuse-layout` skips Surya |
+| Single-instance OCR lock | Dual `run_ocr_pipeline` OOMs on 12GB; lockfile + live-PID check |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -91,6 +98,7 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | Dual `run_ocr_pipeline` PIDs during monitor | note | Avoid concurrent runs on 12GB |
 
 ## Next Action
-1. Wave 1 smoke: re-run ingest same job (idempotent); optional search query smoke
-2. Rotate Qdrant writer/reader keys (appeared in terminal history)
-3. OCR: commit greedy + layout-release; teacher-edit `123.tex`
+1. Commit Phase 2.8 when user asks (tokens + layout artifact + lock + tests)
+2. Optional: full OCR re-run with `--reuse-layout` after one layout write / new TABLE_ROUTER
+3. Homelab follow-ups still uncommitted under `homelab/`
+4. Rotate Qdrant writer key when convenient

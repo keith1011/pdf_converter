@@ -94,7 +94,7 @@ def slash_to_frac(expr: str) -> str:
                 slash_at = i
                 spaced = True
                 break
-            elif depth == 0 and ch == "/" and not expr[i - 1 : i] == "\\":
+            elif depth == 0 and ch == "/" and expr[i - 1 : i] != "\\":
                 slash_at = i
                 spaced = False
                 break

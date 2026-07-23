@@ -74,15 +74,13 @@
 
 ### LayoutArtifact persist (Phase1 resume)
 
+**Status:** Done in Phase 2.8 (2026-07-23) — `layout_artifact.py`, `--reuse-layout`, tests.
+
 **What:** Write/read `LayoutBlock[]` + page image paths so route/polish can resume without re-running Surya.
 
 **Why:** Makes Surya→route→polish phases real; saves VRAM/time on iteration.
 
 **Context:** Architecture C3. Mirror `arrange_only.py` pattern. _(Useful after content-first; not a Ship 1 gate.)_
-
-**Effort:** M  
-**Priority:** P2  
-**Depends on:** Content-first path iterable; VlmClient stable enough
 
 ## Completed
 

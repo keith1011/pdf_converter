@@ -24,7 +24,10 @@ vlm:
   backend: "qwen"   # qwen | glm
   model_name: "Qwen/Qwen2.5-VL-7B-Instruct"
   load_in_4bit: true
-  max_new_tokens: 4096
+  # Stage3 polish (per page). 2048 is enough for typical exam pages; raise if truncated.
+  max_new_tokens: 2048
+  # Stage2 crop OCR (math/text/table). Crops are small — keep lower than polish.
+  max_new_tokens_route: 1024
   temperature: 0.0
   max_pixels: 1003520
 
@@ -32,7 +35,7 @@ vlm:
 glm:
   model_name: "zai-org/GLM-4.6V-Flash"
   load_in_4bit: true
-  max_new_tokens: 4096
+  max_new_tokens: 2048
   temperature: 0.0
   max_pixels: 1003520
 
@@ -43,7 +46,9 @@ paths:
   crop_dir: "output/crops"
 
 pipeline:
-  # false = faster: one Stage3 polish for whole document
+  # Deprecated: content-first always polishes per page (kept for config compat)
   polish_per_page: false
   # skip figure/other blocks in routing
   skip_figures: true
+  # Refuse a second concurrent run_ocr_pipeline (12GB VRAM)
+  single_instance_lock: true

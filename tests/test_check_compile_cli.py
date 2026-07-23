@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import arrange_only
 import run_ocr_pipeline
+
 from ocr_pipeline.cli_report import WarnCollector
 from ocr_pipeline.compile_check import CompileResult, maybe_check_compile
 
@@ -17,6 +18,13 @@ def test_run_ocr_pipeline_parser_exposes_check_compile():
     assert args.check_compile is True
     args_off = parser.parse_args(["dummy.pdf"])
     assert args_off.check_compile is False
+
+
+def test_run_ocr_pipeline_parser_exposes_reuse_layout_and_allow_concurrent():
+    parser = run_ocr_pipeline.build_parser({})
+    args = parser.parse_args(["dummy.pdf", "--reuse-layout", "--allow-concurrent"])
+    assert args.reuse_layout is True
+    assert args.allow_concurrent is True
 
 
 def test_arrange_only_parser_exposes_check_compile():

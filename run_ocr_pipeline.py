@@ -38,7 +38,7 @@ def build_parser(pipe_cfg: dict | None = None) -> argparse.ArgumentParser:
         "--polish-per-page",
         action="store_true",
         default=bool(pipe_cfg.get("polish_per_page", False)),
-        help="Run Stage3 polish after every page (slower)",
+        help="Deprecated no-op: content-first always polishes each page",
     )
     parser.add_argument(
         "--reuse-images",
@@ -46,9 +46,19 @@ def build_parser(pipe_cfg: dict | None = None) -> argparse.ArgumentParser:
         help="Reuse existing page PNGs if present",
     )
     parser.add_argument(
+        "--reuse-layout",
+        action="store_true",
+        help="Skip Surya; load data/pdf_pages/<stem>/layout.json (implies image reuse)",
+    )
+    parser.add_argument(
         "--check-compile",
         action="store_true",
         help="After writing .tex, run latexmk/xelatex in the output dir (Ship 1.5)",
+    )
+    parser.add_argument(
+        "--allow-concurrent",
+        action="store_true",
+        help="Allow a second pipeline (unsafe on 12GB; default is single-instance lock)",
     )
     return parser
 
@@ -66,13 +76,21 @@ def main() -> None:
     print_preflight()
     warns = WarnCollector()
     manager = build_default_pipeline(cfg)
-    result = manager.run(
-        args.pdf,
-        limit=args.limit,
-        polish_per_page=args.polish_per_page,
-        overwrite=not args.reuse_images,
-        warns=warns,
-    )
+    reuse_layout = bool(args.reuse_layout)
+    overwrite = not (args.reuse_images or reuse_layout)
+    lock_enabled = bool(pipe_cfg.get("single_instance_lock", True)) and not args.allow_concurrent
+    try:
+        result = manager.run(
+            args.pdf,
+            limit=args.limit,
+            polish_per_page=args.polish_per_page,
+            overwrite=overwrite,
+            reuse_layout=reuse_layout,
+            single_instance_lock=lock_enabled,
+            warns=warns,
+        )
+    except RuntimeError as e:
+        raise SystemExit(str(e)) from e
     assert result.tex_path is not None
     compile_code = maybe_check_compile(
         tex_path=result.tex_path,

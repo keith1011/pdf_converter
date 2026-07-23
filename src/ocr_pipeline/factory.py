@@ -30,14 +30,20 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     vlm = build_vlm_client(cfg)
     backend = str(vlm_cfg.get("backend", "qwen")).lower()
     text_label = "Qwen2.5-VL" if backend != "glm" else "GLM-4.6V-Flash"
+    polish_tokens = int(vlm_cfg.get("max_new_tokens", 2048))
+    route_tokens = int(vlm_cfg.get("max_new_tokens_route", min(1024, polish_tokens)))
 
     layout = LayoutAnalyzer(
         dpi=int(layout_cfg.get("dpi", 200)),
         device=str(layout_cfg.get("device", "cuda")),
         force_backend=str(layout_cfg.get("force_backend", "")),
     )
-    math = MathRouter(engine=str(cfg.get("math", {}).get("engine", "mineru")), glm_fallback=vlm)
-    text = TextRouter(vlm=vlm, model_name=text_label)
+    math = MathRouter(
+        engine=str(cfg.get("math", {}).get("engine", "mineru")),
+        glm_fallback=vlm,
+        max_new_tokens=route_tokens,
+    )
+    text = TextRouter(vlm=vlm, model_name=text_label, max_new_tokens=route_tokens)
     crop_dir = Path(paths.get("crop_dir", "output/crops"))
     router = DynamicRouter(math, text, crop_dir=crop_dir)
 

@@ -27,9 +27,16 @@ def normalize_display_math(text: str) -> str:
 class MathRouter:
     """Formula/Equation -> MinerU/UniMERNet when available; else VlmClient. Body display $$."""
 
-    def __init__(self, engine: str = "mineru", glm_fallback=None):
+    def __init__(
+        self,
+        engine: str = "mineru",
+        glm_fallback=None,
+        *,
+        max_new_tokens: int | None = None,
+    ):
         self.engine = engine
         self.glm_fallback = glm_fallback  # VlmClient (name kept for call-site compat)
+        self.max_new_tokens = max_new_tokens
         self._ready = False
 
     def _try_init_mineru(self) -> bool:
@@ -56,7 +63,11 @@ class MathRouter:
         # TODO: wire concrete MinerU formula OCR when installed
         if self.glm_fallback is None:
             raise RuntimeError("No formula engine available (MinerU missing and no VLM fallback)")
-        raw = self.glm_fallback.generate(MATH_ROUTER_PROMPT, image_path=crop_path)
+        raw = self.glm_fallback.generate(
+            MATH_ROUTER_PROMPT,
+            image_path=crop_path,
+            max_new_tokens=self.max_new_tokens,
+        )
         return normalize_display_math(raw)
 
     def process(self, block: LayoutBlock) -> LayoutBlock:
@@ -69,9 +80,16 @@ class MathRouter:
 class TextRouter:
     """Text/Title/List/Table crops -> VlmClient (formulas forced to LaTeX)."""
 
-    def __init__(self, vlm, model_name: str = "VlmClient"):
+    def __init__(
+        self,
+        vlm,
+        model_name: str = "VlmClient",
+        *,
+        max_new_tokens: int | None = None,
+    ):
         self.vlm = vlm
         self.model_name = model_name
+        self.max_new_tokens = max_new_tokens
 
     def _prompt_for(self, block_type: BlockType) -> str:
         if block_type == BlockType.TABLE:
@@ -81,7 +99,11 @@ class TextRouter:
     def process(self, block: LayoutBlock) -> LayoutBlock:
         assert block.crop_path is not None
         prompt = self._prompt_for(block.block_type)
-        block.raw_text = self.vlm.generate(prompt, image_path=block.crop_path).strip()
+        block.raw_text = self.vlm.generate(
+            prompt,
+            image_path=block.crop_path,
+            max_new_tokens=self.max_new_tokens,
+        ).strip()
         return block
 
 

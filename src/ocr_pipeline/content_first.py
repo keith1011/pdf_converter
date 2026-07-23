@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from .formula_integrity import check_math_body
 from .models import BBox, ContentSegment, PageIR, SegmentKind

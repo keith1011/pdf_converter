@@ -1,21 +1,65 @@
-"""TDD: multi-page polish strategy to avoid Stage3 CUDA OOM."""
+"""Content-first Stage3 always polishes per page (PageIR requirement)."""
 
 from __future__ import annotations
 
-from ocr_pipeline.pipeline import decide_polish_per_page
+from pathlib import Path
+
+from ocr_pipeline.assemble import FinalPolisher
+from ocr_pipeline.cli_report import WarnCollector
+from ocr_pipeline.pipeline import PipelineManager
 
 
-def test_single_short_page_uses_per_page_polish_for_pageir():
-    assert decide_polish_per_page(page_count=1, draft_chars=500, requested=False) is True
+class _Layout:
+    _backend = "surya"
+
+    def pdf_to_images(self, pdf_path, out_dir, *, limit=0):
+        out_dir.mkdir(parents=True, exist_ok=True)
+        page = out_dir / "page_001.png"
+        page.write_bytes(b"x")
+        return [page]
+
+    def analyze_page(self, image_path, page):
+        return []
+
+    def release(self):
+        pass
 
 
-def test_many_pages_auto_enables_per_page():
-    assert decide_polish_per_page(page_count=14, draft_chars=2000, requested=False) is True
+class _Router:
+    def route_page(self, blocks):
+        return blocks
 
 
-def test_long_draft_auto_enables_per_page():
-    assert decide_polish_per_page(page_count=1, draft_chars=20_000, requested=False) is True
+class _Assembler:
+    def stitch(self, blocks):
+        return "draft"
 
 
-def test_explicit_request_still_true():
-    assert decide_polish_per_page(page_count=1, draft_chars=100, requested=True) is True
+def test_pipeline_always_polishes_each_page_even_when_flag_false(tmp_path: Path):
+    calls = {"polish": 0}
+
+    class CountingPolisher:
+        def polish(self, draft):
+            calls["polish"] += 1
+            return "TXT", FinalPolisher.wrap_tex("BODY"), []
+
+        @staticmethod
+        def extract_tex_body(tex):
+            return FinalPolisher.extract_tex_body(tex)
+
+        @staticmethod
+        def wrap_tex(body):
+            return FinalPolisher.wrap_tex(body)
+
+    pdf = tmp_path / "x.pdf"
+    pdf.write_bytes(b"%PDF")
+    mgr = PipelineManager(
+        _Layout(),
+        _Router(),
+        _Assembler(),
+        CountingPolisher(),
+        output_dir=tmp_path / "out",
+        pages_dir=tmp_path / "pages",
+    )
+    mgr.run(pdf, polish_per_page=False, single_instance_lock=False, warns=WarnCollector())
+    assert calls["polish"] == 1

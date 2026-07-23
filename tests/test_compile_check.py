@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from ocr_pipeline.compile_check import CompileResult, compile_tex, resolve_tex_command
 
 

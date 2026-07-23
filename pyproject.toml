@@ -1,0 +1,56 @@
+# Tooling-only pyproject (does NOT replace requirements-*.txt / .venv GPU stack).
+# Install ruff:  uv pip install -p .venv ruff
+# Or one-shot:   uvx ruff check src tests
+
+[project]
+name = "pdf-scaner"
+version = "0.0.0"
+description = "北辰 feedstock OCR pipeline (local tooling metadata)"
+requires-python = ">=3.11"
+readme = "README.md"
+
+[dependency-groups]
+lint = ["ruff>=0.11"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = [
+  ".venv",
+  "output",
+  "data",
+  "qdrant_storage",
+  "homelab/ingest/__pycache__",
+]
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "UP",  # pyupgrade
+  "B",   # bugbear
+  "SIM", # simplify
+]
+ignore = [
+  "T20",    # print OK for CLI progress
+  "COM812", # formatter conflict
+  "ISC001", # formatter conflict
+  "E501",   # line length — prompts / logs are long
+  "UP042",  # str|Enum keeps JSON-friendly .value for PageIR / artifacts
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert in tests
+"run_ocr_pipeline.py" = ["E402"]  # sys.path bootstrap before package imports
+"arrange_only.py" = ["E402"]
+"extract_questions.py" = ["E402"]
+"run_extract_pipeline.py" = ["E402"]
+"homelab/**" = ["E402", "T20"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
