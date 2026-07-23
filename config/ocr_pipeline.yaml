@@ -38,6 +38,7 @@ vlm:
 
 # Legacy alias — prefer `vlm:` above. Kept so older scripts still load keys.
 glm:
+  # Deprecated for experiments; clean cached weights with scripts/cleanup_glm_weights.ps1.
   model_name: "zai-org/GLM-4.6V-Flash"
   load_in_4bit: true
   max_new_tokens: 2048

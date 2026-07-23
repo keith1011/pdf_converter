@@ -1,4 +1,7 @@
-"""Local GLM-4.6V-Flash client (optional VlmClient backend)."""
+"""Deprecated local GLM-4.6V-Flash client (optional VlmClient backend).
+
+Kept for experiments and backwards compatibility; prefer the Qwen backend.
+"""
 
 from __future__ import annotations
 
