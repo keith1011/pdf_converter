@@ -1,4 +1,4 @@
-"""Stage 2: crop + dynamic routing (Math / Text / Table)."""
+"""Stage 2: crop + dynamic routing (Math / Text / Table / optional Figure)."""
 
 from __future__ import annotations
 
@@ -25,49 +25,30 @@ def normalize_display_math(text: str) -> str:
 
 
 class MathRouter:
-    """Formula/Equation -> FormulaEngine, with legacy VLM fallback support."""
+    """Formula/Equation -> FormulaEngine, or VLM fallback when no engine is wired."""
 
     def __init__(
         self,
-        engine: str = "mineru",
-        glm_fallback=None,
         *,
         formula_engine=None,
+        vlm_fallback=None,
         max_new_tokens: int | None = None,
+        # Deprecated alias (call-site compat). Prefer ``vlm_fallback``.
+        glm_fallback=None,
     ):
-        self.engine = engine
-        self.glm_fallback = glm_fallback  # VlmClient (name kept for call-site compat)
         self.formula_engine = formula_engine
+        self.vlm_fallback = vlm_fallback if vlm_fallback is not None else glm_fallback
+        self.glm_fallback = self.vlm_fallback  # back-compat attribute
         self.max_new_tokens = max_new_tokens
-        self._ready = False
-
-    def _try_init_mineru(self) -> bool:
-        if self._ready:
-            return True
-        try:
-            import importlib
-
-            for name in ("magic_pdf", "mineru", "unimernet"):
-                try:
-                    importlib.import_module(name)
-                    self._ready = True
-                    print(f"[MathRouter] Found package: {name}")
-                    return True
-                except ImportError:
-                    continue
-        except Exception:
-            pass
-        print("[MathRouter] MinerU/UniMERNet not found; will use VLM fallback for formulas")
-        return False
 
     def extract_latex(self, crop_path: Path) -> str:
         if self.formula_engine is not None:
             return self.formula_engine.ocr(crop_path)
-        self._try_init_mineru()
-        # TODO: wire concrete MinerU formula OCR when installed
-        if self.glm_fallback is None:
-            raise RuntimeError("No formula engine available (MinerU missing and no VLM fallback)")
-        raw = self.glm_fallback.generate(
+        if self.vlm_fallback is None:
+            raise RuntimeError(
+                "No formula engine configured (set engines.formula or pass vlm_fallback)"
+            )
+        raw = self.vlm_fallback.generate(
             MATH_ROUTER_PROMPT,
             image_path=crop_path,
             max_new_tokens=self.max_new_tokens,
@@ -106,9 +87,7 @@ class TextRouter:
 
     def process(self, block: LayoutBlock) -> LayoutBlock:
         assert block.crop_path is not None
-        engine = (
-            self.table_engine if block.block_type == BlockType.TABLE else self.text_engine
-        )
+        engine = self.table_engine if block.block_type == BlockType.TABLE else self.text_engine
         if engine is not None:
             block.raw_text = engine.ocr(block.crop_path)
             return block
@@ -124,15 +103,24 @@ class TextRouter:
 
 
 class DynamicRouter:
-    """Crop page regions and dispatch by Surya label (preserve reading order)."""
+    """Crop page regions and dispatch by layout block type (preserve reading order)."""
 
     MATH_TYPES = {BlockType.FORMULA, BlockType.EQUATION}
     TEXT_TYPES = {BlockType.TEXT, BlockType.TITLE, BlockType.LIST, BlockType.TABLE}
+    FIGURE_TYPES = {BlockType.FIGURE}
 
-    def __init__(self, math_router: MathRouter, text_router: TextRouter, crop_dir: Path):
+    def __init__(
+        self,
+        math_router: MathRouter,
+        text_router: TextRouter,
+        crop_dir: Path,
+        *,
+        skip_figures: bool = True,
+    ):
         self.math_router = math_router
         self.text_router = text_router
         self.crop_dir = crop_dir
+        self.skip_figures = skip_figures
         self.crop_dir.mkdir(parents=True, exist_ok=True)
 
     def crop(self, block: LayoutBlock) -> Path:
@@ -157,11 +145,25 @@ class DynamicRouter:
         return out
 
     def route_block(self, block: LayoutBlock) -> LayoutBlock:
+        if block.block_type in self.FIGURE_TYPES and self.skip_figures:
+            block.crop_path = self.crop(block)
+            print(
+                f"    skip-ocr {block.block_id} [{block.block_type.value}] "
+                f"order={block.order} (skip_figures; crop kept)"
+            )
+            block.raw_text = ""
+            block.meta["skipped"] = True
+            block.meta["skip_reason"] = "skip_figures"
+            return block
+
         block.crop_path = self.crop(block)
         print(f"    route {block.block_id} [{block.block_type.value}] order={block.order}")
         if block.block_type in self.MATH_TYPES:
             return self.math_router.process(block)
         if block.block_type in self.TEXT_TYPES:
+            return self.text_router.process(block)
+        if block.block_type in self.FIGURE_TYPES:
+            # Provisional: VLM/text OCR until dedicated figure-caption path ships.
             return self.text_router.process(block)
         block.raw_text = ""
         block.meta["skipped"] = True

@@ -1,7 +1,9 @@
 # P-ocr feedstock OCR — uv / pyproject is the install source of truth.
-# Runtime GPU notes: experiment stacks (GOT / MinerU / PP-OCR) use optional
-# dependency groups; Windows torch CUDA uses the pytorch-cu126 index below.
+# Trunk OCR: MinerU layout + Qwen text/formula (default-groups include `mineru`).
+# transformers pinned <5 for MinerU + Qwen coexistence.
+# Windows torch CUDA uses the pytorch-cu126 index below.
 # Optional Surya still: `uv pip install surya-ocr --no-deps` (Pillow pin issues).
+# GOT stack: `uv sync --group got` (plus paddle CPU as needed).
 
 [project]
 name = "pdf-scaner"
@@ -24,7 +26,7 @@ dependencies = [
     "pyyaml>=6.0",
     "torch>=2.13.0",
     "torchvision>=0.19.0",
-    "transformers>=4.49.0",
+    "transformers>=4.49,<5",
 ]
 
 [build-system]
@@ -49,13 +51,17 @@ lint = [
     "ruff>=0.11",
     "ty",
 ]
+mineru = [
+    "mineru[pipeline]>=3.4.4",
+]
 test = [
     "pytest>=8.0",
     "pytest-cov",
 ]
 
 [tool.uv]
-default-groups = ["dev"]
+# Trunk layout needs mineru; keep it in the default sync for OCR runs.
+default-groups = ["dev", "mineru"]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu126" }

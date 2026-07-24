@@ -6,7 +6,7 @@ import argparse
 import json
 import shutil
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from done import sha256_file, validate_done_dict
@@ -36,7 +36,7 @@ def publish(
     source_dir = source_dir.resolve()
     share_root = share_root.resolve()
     pdf_name = source_pdf or f"{doc_id}.pdf"
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     job_id = job_id or f"{stamp}-{doc_id}"
 
     required = [source_dir / f"{doc_id}.txt"]
@@ -49,6 +49,9 @@ def publish(
     for p in optional:
         if p.is_file():
             artifacts_src.append(p)
+    figures_dir = source_dir / "figures"
+    if figures_dir.is_dir():
+        artifacts_src.extend(sorted(figures_dir.glob("*.png")))
 
     incoming = share_root / "jobs" / ".incoming" / job_id
     final = share_root / "jobs" / job_id
@@ -60,9 +63,11 @@ def publish(
 
     artifact_meta: list[dict[str, str]] = []
     for src in artifacts_src:
-        dest = incoming / src.name
+        rel = src.relative_to(source_dir).as_posix()
+        dest = incoming / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
-        artifact_meta.append({"path": src.name, "sha256": sha256_file(dest)})
+        artifact_meta.append({"path": rel, "sha256": sha256_file(dest)})
 
     # Verify hashes before DONE
     for art in artifact_meta:
@@ -74,7 +79,7 @@ def publish(
         "done_schema": 1,
         "job_id": job_id,
         "doc_id": doc_id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "source_pdf": Path(pdf_name).name,
         "artifacts": artifact_meta,
         "ocr_pipeline_version": _git_sha(source_dir.parent if (source_dir.parent / ".git").exists() else Path.cwd()),

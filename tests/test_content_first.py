@@ -124,6 +124,73 @@ def test_pipeline_writes_pageir_after_content_first(tmp_path: Path):
     assert warnings
 
 
+def test_render_figure_as_caption_stub():
+    page = PageIR(
+        page_index=1,
+        segments=[
+            ContentSegment(
+                kind=SegmentKind.FIGURE,
+                text="圓形面積示意圖",
+                source_block_id="p001_b012",
+                bbox=BBox(0, 0, 10, 10),
+                crop_relpath="figures/p001_b012.png",
+            )
+        ],
+    )
+    txt, tex_body = render_page_ir(page)
+    assert txt == "(圖: 圓形面積示意圖)"
+    assert tex_body == "(圖: 圓形面積示意圖)"
+
+
+def test_write_pageir_json_includes_crop_relpath(tmp_path: Path):
+    pages = [
+        PageIR(
+            page_index=1,
+            segments=[
+                ContentSegment(
+                    kind=SegmentKind.FIGURE,
+                    text="示意圖",
+                    source_block_id="p001_b012",
+                    bbox=BBox(0, 0, 10, 10),
+                    crop_relpath="figures/p001_b012.png",
+                )
+            ],
+        )
+    ]
+    path = tmp_path / "demo.pageir.json"
+    write_pageir_json(path, pages)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    seg = data["pages"][0]["segments"][0]
+    assert seg["kind"] == "figure"
+    assert seg["crop_relpath"] == "figures/p001_b012.png"
+
+
+def test_finalize_merges_figure_segments(tmp_path: Path):
+    from ocr_pipeline.content_first import finalize_content_first
+
+    def wrap(body: str) -> str:
+        return f"\\documentclass{{ctexart}}\\begin{{document}}{body}\\end{{document}}"
+
+    fig = ContentSegment(
+        kind=SegmentKind.FIGURE,
+        text="示意圖",
+        source_block_id="p001_b012",
+        bbox=BBox(0, 0, 10, 10),
+        crop_relpath="figures/p001_b012.png",
+    )
+    full_txt, _, _, _, pageir_path, _ = finalize_content_first(
+        source="demo",
+        output_dir=tmp_path,
+        page_drafts=[(1, "正文一行", BBox(0, 0, 100, 100))],
+        wrap_tex_fn=wrap,
+        figure_segments_by_page={1: [fig]},
+    )
+    assert "(圖: 示意圖)" in full_txt
+    data = json.loads(pageir_path.read_text(encoding="utf-8"))
+    kinds = [s["kind"] for s in data["pages"][0]["segments"]]
+    assert "figure" in kinds
+
+
 def test_finalize_strips_tabular_chrome_from_polished_draft(tmp_path: Path):
     from ocr_pipeline.assemble import FinalPolisher
     from ocr_pipeline.content_first import finalize_content_first

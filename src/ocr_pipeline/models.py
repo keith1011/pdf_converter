@@ -83,6 +83,7 @@ class SegmentKind(str, Enum):
     PROSE = "prose"
     MATH = "math"
     MARK_NOTE = "mark_note"
+    FIGURE = "figure"
 
 
 class IntegrityStatus(str, Enum):
@@ -100,6 +101,7 @@ class ContentSegment:
     source_block_id: str
     bbox: BBox
     integrity: IntegrityStatus = IntegrityStatus.OK
+    crop_relpath: str | None = None
 
 
 @dataclass

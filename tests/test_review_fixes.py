@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 from ocr_pipeline.assemble import FinalPolisher
 from ocr_pipeline.cli_report import WarnCollector
@@ -98,10 +97,23 @@ def test_polish_per_page_prints_stage3_start_once(monkeypatch, tmp_path: Path):
     assert calls == ["stage3"], f"expected one Stage3 start, got {calls!r}"
 
 
-def test_math_router_fallback_message_says_vlm(capsys):
-    """Arch copy: default engine is VlmClient, not GLM-branded fallback text."""
-    r = MathRouter(engine="mineru", glm_fallback=MagicMock())
-    assert r._try_init_mineru() is False
-    out = capsys.readouterr().out
-    assert "VLM" in out
-    assert "GLM fallback" not in out
+def test_math_router_requires_engine_or_vlm_fallback():
+    r = MathRouter()
+    try:
+        r.extract_latex(Path("missing.png"))
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as exc:
+        assert "formula engine" in str(exc).lower()
+
+
+def test_math_router_vlm_fallback_used_when_no_formula_engine(tmp_path):
+    crop = tmp_path / "c.png"
+    crop.write_bytes(b"x")
+
+    class FakeVlm:
+        def generate(self, prompt, image_path=None, max_new_tokens=None):
+            assert image_path == crop
+            return "x^2"
+
+    r = MathRouter(vlm_fallback=FakeVlm())
+    assert "x^2" in r.extract_latex(crop)

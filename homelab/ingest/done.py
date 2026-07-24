@@ -115,6 +115,12 @@ def validate_done_dict(data: dict[str, Any], job_dir: Path | None = None) -> dic
             p = job_dir / optional
             if p.is_file() and optional not in seen:
                 raise ValueError(f"{optional} exists on disk but not listed in artifacts")
+        figures = job_dir / "figures"
+        if figures.is_dir():
+            for png in figures.glob("*.png"):
+                rel = f"figures/{png.name}"
+                if rel not in seen:
+                    raise ValueError(f"{rel} exists on disk but not listed in artifacts")
 
     return data
 

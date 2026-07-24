@@ -20,6 +20,7 @@ Lock the OCR trunk on **Qwen2.5-VL**, extend the **ingest contract** so each job
 | Decision | Choice |
 |----------|--------|
 | Trunk VLM | **Qwen2.5-VL-7B-Instruct 4bit** (greedy) for text / polish / figure captions |
+| Trunk layout | **MinerU** (locked 2026-07-24; replaces Surya as default) |
 | Specialty knives | `engines.formula`: got / unimernet **only**; never default text path |
 | Figure ingest | Caption text embedded; crop PNG stored on job; path in payload |
 | When to extract figures | Any layout `FIGURE` / picture block (both `marking_scheme` and `question_paper`) |
@@ -32,7 +33,7 @@ Lock the OCR trunk on **Qwen2.5-VL**, extend the **ingest contract** so each job
 
 ```text
 PDF
-  → trunk OCR (Surya layout + Qwen2.5-VL text/polish; optional formula knife)
+  → trunk OCR (MinerU layout + Qwen2.5-VL text/polish/formula; optional formula knife)
   → for each FIGURE block: crop PNG + Qwen short caption
   → artifacts: {doc}.txt / .tex / .pageir.json + figures/*.png
   → batch CLI: for each doc_id → stage → publish(Z:/jobs) → ingest
@@ -90,7 +91,7 @@ Re-ingest the same `doc_id` with `--reindex` deletes prior points for that doc b
 
 ## OCR behavior
 
-1. Run layout (default Surya).
+1. Run layout (**default MinerU**; Surya/DocLayout optional).
 2. Route text/table via Qwen (trunk); formulas via configured formula engine (default Qwen; optional got/unimernet).
 3. For each figure-like block: write crop under a staging figures dir keyed by stem/block id; call Qwen with a short caption prompt; append a `figure` segment to pageir.
 4. Finalize txt/tex/pageir as today, including figure caption lines.

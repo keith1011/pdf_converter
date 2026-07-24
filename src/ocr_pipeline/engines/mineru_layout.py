@@ -21,8 +21,10 @@ _LABEL_MAP = {
     "display_formula": BlockType.FORMULA,
     "formula": BlockType.FORMULA,
     "equation": BlockType.EQUATION,
-    "image": BlockType.OTHER,
-    "figure": BlockType.OTHER,
+    "image": BlockType.FIGURE,
+    "figure": BlockType.FIGURE,
+    "picture": BlockType.FIGURE,
+    "figure_caption": BlockType.OTHER,
 }
 
 
@@ -41,8 +43,8 @@ def _load_mineru_layout_model(*, device: str) -> Any:
         )
     except ImportError as exc:
         raise EngineError(
-            "MinerU layout requires the `mineru` package. Install it with "
-            "`pip install -r requirements-mineru-ppocr.txt`."
+            "MinerU layout requires the `mineru` package. Install with "
+            "`uv sync --group mineru` (pins transformers<5), or use `.venv-mineru312`."
         ) from exc
     try:
         import os

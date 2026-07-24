@@ -4,7 +4,7 @@
 PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--check-compile` PDF；教師 ≤10 分鐘手改後可 reuse。
 
 ## Current Phase
-**Python 3.12 locked** — `.python-version`=3.12; `.venv` = CPython 3.12.13; `uv run pytest` 120 passed; torch cu126 + surya OK.
+**Trunk locked: MinerU + Qwen + Qwen** — `config/ocr_pipeline.yaml` `engines.layout=mineru`; figure+batch ingest plan **complete** (Tasks 1–7 uncommitted).
 
 ## Routing (locked)
 - Always: planning-with-files (`task_plan.md` / `findings.md` / `progress.md`)
@@ -17,10 +17,13 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | GPU | RTX 4070 Super **12GB** |
 | Python | **3.12** (`.python-version`; main `.venv` via uv). Do not use 3.14 for this repo. |
 | Default VLM | **Qwen2.5-VL-7B-Instruct 4bit** |
+| **Trunk stack** | **MinerU layout + Qwen text + Qwen formula** (locked 2026-07-24) |
+| Formula knives | got / unimernet opt-in only |
 | Decode | **greedy only** (`do_sample=False`) — sampling → CUDA multinomial assert |
 | Token budgets | Stage3 polish **2048**; Stage2 route **1024** (`max_new_tokens_route`) |
-| Surya v2 | Docker/vLLM OK for layout；**`release()` must `docker stop surya-vllm-*`** before VLM |
-| Order | Layout → **stop vLLM** → Stage2/3 Qwen → content-first finalize → optional compile |
+| Surya v2 | Optional fallback；Docker cold ~221s — not trunk；if used, `release()` must stop `surya-vllm-*` |
+| MinerU runtime | `uv sync` (default-groups includes `mineru`); transformers pinned `<5` |
+| Order | Layout (MinerU) → Stage2/3 Qwen → content-first finalize → optional compile |
 
 ## Phases
 
@@ -62,6 +65,44 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [x] Add skip-polish, output tagging, and stage timing
 - [x] Run focused regression suite (20 passed)
 
+### Task 3: Figure crop/export/finalize wiring — complete
+- [x] Replace skip-without-crop behavior with crop-and-skip-OCR
+- [x] Merge exported FIGURE segments into matching PageIR pages
+- [x] Wire figure export path/config through pipeline factory
+- [x] TDD RED confirmed (2 failed), focused regression 16 passed, full suite 135 passed
+- **Status:** complete; no commit requested
+
+### Task 4: Job staging + publish figures — complete
+- [x] Add clean job staging with required text and optional TeX/PageIR/figures
+- [x] Publish figure artifacts with relative paths
+- [x] Require on-disk figures to appear in DONE artifacts
+- [x] TDD RED confirmed; focused suite 9 passed
+- [x] Full suite 140 passed; scoped ruff clean; task report written
+- **Status:** complete; no commit requested
+
+### Task 5: Ingest pageir_v2 + crop_path — complete
+- [x] `CHUNK_VERSION = "pageir_v2"`
+- [x] `load_segments` maps `crop_relpath` → `crop_path`
+- [x] `ingest_job` payload includes `crop_path` only when present
+- [x] TDD RED confirmed (2 failed), GREEN (2 passed)
+- [x] Report: `.superpowers/sdd/task-5-report.md`
+- **Status:** complete; no commit requested
+
+### Task 6 (plan): Batch CLI `ocr_pipeline.batch_export` — complete
+- [x] `src/ocr_pipeline/batch_export.py` + `tests/test_batch_export.py`
+- [x] Monkeypatchable module-level `publish` / `ingest_job` / `stage_job_dir`
+- [x] Preflight writable jobs + writer key; continue unless `--fail-fast`
+- [x] TDD RED → GREEN; focused related suite 15 passed
+- [x] Report: `.superpowers/sdd/task-6-report.md`
+- **Status:** complete; no commit requested
+
+### Task 7 (plan): Planning docs + full regression — complete
+- [x] Full suite `uv run pytest -q` → **144 passed**, 1 third-party deprecation warning
+- [x] Updated `task_plan.md` / `findings.md` / `progress.md` for figure+batch contract
+- [x] Manual GPU OCR smoke **not** run (deferred to user)
+- [x] Report: `.superpowers/sdd/task-7-report.md`
+- **Status:** complete; no commit requested
+
 ### Task 6: PP-OCR Traditional Chinese text engine — in progress
 - [x] Add lazy `PpocrTextEngine` and PP-OCR requirements file
 - [x] Wire `engines.text: ppocr` while retaining the VLM default
@@ -101,6 +142,9 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | The Windows WSL `bash` shim has no `/bin/bash`, so the required Bash heredoc commit form cannot run. | Use PowerShell's native multiline string to pass the same one-line commit message. |
 | Task 8 focused pytest invocation returned no shell exit status. | Record the terminal limitation; do not claim the CPU suite passed without an explicit result. |
 | Task 10 status/diff/log shell checks returned no exit status. | Record the limitation; inspect edited files directly and retry only the scoped staging/commit command. |
+| Task 3 RED tests failed on missing crop and unsupported finalize keyword. | Implemented crop retention and `figure_segments_by_page`; focused tests now pass. |
+| Task 4 scoped ruff found pre-existing `timezone.utc` usage in modified `publish.py`. | Updated the file to Python 3.12's `datetime.UTC`; rerun scoped lint. |
+| Task 4 report path already contained an older unrelated Task 4 report. | Replaced the stale appended section so the requested path contains only the current job-staging report. |
 
 ### Phase 2.5b: LayoutArtifact resume — complete (via 2.8)
 - [x] Persist LayoutBlock JSON; resume route/polish without re-Surya
@@ -147,6 +191,9 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | Stage3 tokens 2048 / Stage2 route 1024 | Full `123.tex` ~15KB; crops rarely need 4k; raise if polish truncates |
 | LayoutArtifact beside page PNGs | `data/pdf_pages/<stem>/layout.json`; `--reuse-layout` skips Surya |
 | Single-instance OCR lock | Dual `run_ocr_pipeline` OOMs on 12GB; lockfile + live-PID check |
+| **Trunk = MinerU + Qwen + Qwen** (2026-07-24) | Layout bakeoff (equation boxes) + scorecard (Qwen quality); config `engines.layout=mineru` |
+| transformers `<5` + `mineru` uv group | MinerU 3.4 needs transformers 4.x; default-groups include mineru |
+| `skip_figures` wired | DynamicRouter honors `pipeline.skip_figures`; false → text/VLM OCR on FIGURE |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -159,7 +206,6 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | Dual `run_ocr_pipeline` PIDs during monitor | note | Avoid concurrent runs on 12GB |
 
 ## Next Action
-1. Optional: full OCR re-run with `--reuse-layout` / new TABLE_ROUTER (Phase 2.7 leftover)
-2. Phase Ship 2: OCR overlay PDF — only when feedstock quality is enough
-3. Homelab Wave 2 (Ollama / B agent) — **closed** until explicitly requested
-4. Remaining dirty tree: OCR touch files + `uv.lock` + `.superpowers/sdd/` reports (triage / discard noise)
+1. **Figure+batch plan complete** (Tasks 1–7 uncommitted) — optional: commit when user asks (`docs: figure ingest + batch CLI status` or code+docs package)
+2. Manual GPU smoke checklist (limit-1 OCR → figures → `batch_export --publish --ingest` → Qdrant `kind=figure` / `pageir_v2`) — only when user asks
+3. Homelab Wave 2 / ColPali / Ship 2 overlay — **closed** until explicitly requested

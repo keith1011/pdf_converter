@@ -23,6 +23,8 @@ def render_page_ir(page: PageIR) -> tuple[str, str]:
                 lines.append(f"${body}$")
         elif seg.kind is SegmentKind.MARK_NOTE:
             lines.append(f"(分註: {seg.text})")
+        elif seg.kind is SegmentKind.FIGURE:
+            lines.append(f"(圖: {seg.text})")
         else:
             lines.append(seg.text)
     joined = "\n".join(lines)
@@ -62,6 +64,7 @@ def apply_integrity_to_page(page: PageIR) -> tuple[PageIR, list[str]]:
                     source_block_id=seg.source_block_id,
                     bbox=seg.bbox,
                     integrity=status,
+                    crop_relpath=seg.crop_relpath,
                 )
             )
         else:
@@ -82,6 +85,7 @@ def write_pageir_json(path: Path, pages: list[PageIR]) -> None:
                         "source_block_id": s.source_block_id,
                         "bbox": [s.bbox.x1, s.bbox.y1, s.bbox.x2, s.bbox.y2],
                         "integrity": s.integrity.value,
+                        "crop_relpath": s.crop_relpath,
                     }
                     for s in p.segments
                 ],
@@ -126,6 +130,7 @@ def finalize_content_first(
     output_dir: Path,
     page_drafts: list[tuple[int, str, BBox]],
     wrap_tex_fn: Callable[[str], str],
+    figure_segments_by_page: dict[int, list[ContentSegment]] | None = None,
 ) -> tuple[str, str, Path, Path, Path, list[str]]:
     """
     Build PageIR per page, render, wrap tex, write txt/tex/pageir.json.
@@ -138,6 +143,13 @@ def finalize_content_first(
 
     for page_index, stitched_text, page_bbox in page_drafts:
         page, warns = build_page_ir_from_stitched(page_index, stitched_text, page_bbox)
+        if figure_segments_by_page:
+            extra = figure_segments_by_page.get(page_index) or []
+            if extra:
+                page = PageIR(
+                    page_index=page.page_index,
+                    segments=[*page.segments, *extra],
+                )
         pages_ir.append(page)
         all_warnings.extend(warns)
 

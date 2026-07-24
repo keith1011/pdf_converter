@@ -44,7 +44,8 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     polish_tokens = int(vlm_cfg.get("max_new_tokens", 2048))
     route_tokens = int(vlm_cfg.get("max_new_tokens_route", min(1024, polish_tokens)))
 
-    layout_name = str(engines_cfg.get("layout", "surya")).lower()
+    # Trunk default (2026-07-24): MinerU + Qwen + Qwen when engines.* omitted.
+    layout_name = str(engines_cfg.get("layout", "mineru")).lower()
     text_name = str(engines_cfg.get("text", "vlm")).lower()
     formula_name = str(engines_cfg.get("formula", "vlm")).lower()
     if layout_name not in {"surya", "doclayout_yolo", "mineru"}:
@@ -72,9 +73,7 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         table_engine = PpocrTextEngine()
     else:
         text_engine = VlmTextEngine(vlm, max_new_tokens=route_tokens)
-        table_engine = VlmTextEngine(
-            vlm, max_new_tokens=route_tokens, prompt=TABLE_ROUTER_PROMPT
-        )
+        table_engine = VlmTextEngine(vlm, max_new_tokens=route_tokens, prompt=TABLE_ROUTER_PROMPT)
     text = TextRouter(
         model_name=text_label,
         text_engine=text_engine,
@@ -82,7 +81,10 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         max_new_tokens=route_tokens,
     )
     crop_dir = Path(paths.get("crop_dir", "output/crops"))
-    router = DynamicRouter(math, text, crop_dir=crop_dir)
+    pipe_cfg = cfg.get("pipeline") or {}
+    skip_figures = bool(pipe_cfg.get("skip_figures", True))
+    extract_figures = bool(pipe_cfg.get("extract_figures", True))
+    router = DynamicRouter(math, text, crop_dir=crop_dir, skip_figures=skip_figures)
 
     return PipelineManager(
         layout=layout,
@@ -98,4 +100,5 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         polisher=FinalPolisher(vlm),
         output_dir=Path(paths.get("output_dir", "output")),
         pages_dir=Path(paths.get("pages_dir", "data/pdf_pages")),
+        extract_figures=extract_figures,
     )

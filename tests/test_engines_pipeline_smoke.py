@@ -1,4 +1,3 @@
-from pathlib import Path
 
 from ocr_pipeline.assemble import FinalPolisher
 from ocr_pipeline.cli_report import WarnCollector
@@ -83,3 +82,17 @@ def test_factory_builds_ppocr_text_engines():
 
     assert isinstance(manager.router.text_router.text_engine, PpocrTextEngine)
     assert isinstance(manager.router.text_router.table_engine, PpocrTextEngine)
+
+
+def test_factory_wires_skip_figures_from_pipeline_config():
+    on = build_default_pipeline({"pipeline": {"skip_figures": True}})
+    off = build_default_pipeline({"pipeline": {"skip_figures": False}})
+    assert on.router.skip_figures is True
+    assert off.router.skip_figures is False
+
+
+def test_factory_wires_extract_figures_from_pipeline_config():
+    default = build_default_pipeline({})
+    off = build_default_pipeline({"pipeline": {"extract_figures": False}})
+    assert default.extract_figures is True
+    assert off.extract_figures is False

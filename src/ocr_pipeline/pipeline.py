@@ -17,7 +17,7 @@ from .layout_artifact import (
     load_layout_artifact,
     save_layout_artifact,
 )
-from .models import BBox, PageResult, PipelineResult
+from .models import BBox, BlockType, ContentSegment, PageResult, PipelineResult
 from .pipeline_lock import DEFAULT_LOCK_NAME, PipelineLock
 from .routers import DynamicRouter
 
@@ -33,6 +33,7 @@ class PipelineManager:
         pages_dir: Path = Path("data/pdf_pages"),
         *,
         layout_engine=None,
+        extract_figures: bool = True,
     ):
         self.layout = layout
         self.layout_engine = layout_engine
@@ -41,6 +42,7 @@ class PipelineManager:
         self.polisher = polisher
         self.output_dir = output_dir
         self.pages_dir = pages_dir
+        self.extract_figures = extract_figures
 
     @staticmethod
     def _safe_stem(path: Path) -> str:
@@ -181,6 +183,31 @@ class PipelineManager:
                     pr.txt, pr.tex = t, x
         draft = "\n\n".join(p.draft for p in pages)
 
+        figure_segments_by_page: dict[int, list[ContentSegment]] = {}
+        figure_blocks = [
+            block
+            for page in pages
+            for block in page.blocks
+            if block.block_type is BlockType.FIGURE
+        ]
+        if self.extract_figures and figure_blocks:
+            from .figure_export import export_figures
+
+            with timer.section("figure_export"):
+                segments, figure_warns = export_figures(
+                    blocks=figure_blocks,
+                    figures_dir=self.output_dir / artifact_source / "figures",
+                    vlm=self.polisher.vlm,
+                )
+            for warning in figure_warns:
+                warns.add(warning)
+            page_by_block_id = {block.block_id: block.page for block in figure_blocks}
+            for segment in segments:
+                page_index = page_by_block_id.get(segment.source_block_id)
+                if page_index is None:
+                    page_index = int(segment.source_block_id.split("_", 1)[0][1:])
+                figure_segments_by_page.setdefault(page_index, []).append(segment)
+
         page_drafts: list[tuple[int, str, BBox]] = []
         for pr in pages:
             if pr.tex:
@@ -201,6 +228,7 @@ class PipelineManager:
                     output_dir=self.output_dir,
                     page_drafts=page_drafts,
                     wrap_tex_fn=_wrap,
+                    figure_segments_by_page=figure_segments_by_page,
                 )
             )
         for w in cf_warns:

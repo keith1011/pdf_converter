@@ -7,6 +7,7 @@ Local PDF OCR pipeline: content-first TeX drafts for teacher reuse (Surya layout
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
 
 Key routing rules:
+- **Writing plan / 實作計畫 / multi-step feature from idea** → Superpowers **`/brainstorming` first** (spec → then `/writing-plans`). Do not jump to writing-plans unless user says spec is already locked.
 - Product ideas/brainstorming → invoke /office-hours
 - Strategy/scope → invoke /plan-ceo-review
 - Architecture → invoke /plan-eng-review

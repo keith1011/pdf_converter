@@ -1,5 +1,78 @@
 # Progress Log
 
+## 2026-07-24 09:24 — GPU smoke (figure + batch)
+- OCR limit-1: `123` ~94s, `789` ~42s (MinerU+Qwen); no MinerU FIGURE labels on these pages.
+- Forced figure path: `export_figures` → PNG + caption (`output/_smoke_fig/figures/p001_bFIG.png`, 9KB).
+- Batch: temp share (Z: missing) publish+ingest `123` 59/59 + `789` 4/4; Qdrant samples `chunk_version=pageir_v2`.
+
+## 2026-07-24 — Task 7: Planning docs + full regression
+- Figure+batch plan Tasks 1–6 code complete (uncommitted); Task 7 docs + suite.
+- `uv run pytest -q` → **144 passed**, 1 third-party deprecation warning (surya/Pydantic).
+- Updated `task_plan.md` Next Action (plan complete; ColPali still backlog); `findings.md` contract notes (`skip_figures` / `extract_figures` / `pageir_v2` / batch CLI).
+- Skipped `handoff.md` (no existing batch command snippet).
+- GPU OCR smoke **not** run; no git commit.
+
+## 2026-07-24 — Task 6 fix: SystemExit per-doc continue
+- Per-doc `except (Exception, SystemExit)`; preflight rejects `--ingest` without `--publish`.
+- New test `test_batch_continues_after_ingest_systemexit`.
+- Verification: `uv run pytest tests/test_batch_export.py -q` → **2 passed**.
+- Notes appended to `.superpowers/sdd/task-6-report.md`; no commit.
+
+## 2026-07-24 — Task 6: batch_export CLI
+- TDD RED: `ModuleNotFoundError: ocr_pipeline.batch_export`.
+- Implemented `src/ocr_pipeline/batch_export.py`: stage→publish→ingest, preflight, fail-continue, lazy monkeypatchable homelab imports.
+- Verification: focused related suite **15 passed** (`test_batch_export` + job_stage + ingest_figures + figure_export + content_first).
+- Report: `.superpowers/sdd/task-6-report.md`; no commit.
+
+## 2026-07-24 — Task 4: staging and figure publication
+- TDD RED confirmed: test collection fails because `ocr_pipeline.job_stage` does not exist.
+- Added regression coverage for staging figures, publishing nested figure artifacts, accepting listed figures, and rejecting unlisted on-disk figures.
+- Implemented clean staging, relative-path publication, and DONE completeness checks for `figures/*.png`.
+- Verification: focused 9 passed; full suite 140 passed with 1 third-party deprecation warning; scoped ruff clean.
+- Report: `.superpowers/sdd/task-4-report.md`; no commit created.
+
+## 2026-07-24 — Task 3: figure crop/export/finalize wiring
+- TDD RED: 2 expected failures (skipped FIGURE had no crop; finalize rejected figure merge input).
+- Router now retains FIGURE crops while suppressing Stage2 OCR when `skip_figures=true`.
+- Pipeline exports captions to `output/<artifact_source>/figures`, groups them by page, and finalizes them into txt/tex/PageIR.
+- Factory/config expose `pipeline.extract_figures` with default `true`.
+- Verification: focused 2 passed; required related suite 16 passed; integration 2 passed; full suite 135 passed, 1 third-party deprecation warning; ruff clean.
+- Report: `.superpowers/sdd/task-3-report.md`
+
+## 2026-07-24 — Task 2: Figure caption prompt + figure_export
+- TDD: 2 RED (`figure_export` missing) → implement → 2 GREEN in `test_figure_export.py`.
+- Added `FIGURE_CAPTION_PROMPT`, `export_figures()`; pipeline wiring deferred Task 3.
+- Report: `.superpowers/sdd/task-2-report.md`
+
+## 2026-07-24 — Task 1: PageIR figure model + render + JSON
+- TDD: 3 RED (missing FIGURE/crop_relpath) → implement → 11 GREEN in `test_page_ir_models` + `test_content_first`.
+- Report: `.superpowers/sdd/task-1-report.md`
+
+## 2026-07-24 08:38 — writing-plans: figure caption + batch ingest
+- Spec locked: `docs/superpowers/specs/2026-07-24-trunk-qwen-ingest-contract-design.md`
+- Plan written: `docs/superpowers/plans/2026-07-24-figure-caption-batch-ingest.md` (Tasks 1–7)
+- Awaiting execution choice: subagent-driven vs inline
+
+## 2026-07-24 08:36 — Process: brainstorming before writing-plans
+- User rule: open writing plans via Superpowers `/brainstorming` first.
+- Added `.cursor/rules/superpowers-brainstorm-first.mdc`; noted in `CLAUDE.md`.
+
+## 2026-07-24 08:21 — Close trunk gaps (uv mineru / skip_figures / MathRouter)
+- Wired `skip_figures` into `DynamicRouter` + factory; FIGURE OCR when false.
+- Simplified `MathRouter` (no MinerU probe); updated review tests.
+- `uv add "transformers>=4.49,<5"` + `--group mineru "mineru[pipeline]"`; default-groups include mineru.
+- `uv run pytest`: 127 passed; `import mineru` works in main `.venv`.
+
+## 2026-07-24 08:16 — modern-python check: MinerU + Qwen + Qwen
+- Reviewed factory / mineru_layout / vlm_text / vlm_formula / vlm_client / routers / pipeline.
+- Verified config load wires trunk correctly; ruff OK; focused pytest 13 passed.
+- Fixes: factory default `layout=mineru`; MinerU figure labels → `FIGURE`; trunk factory tests; install error message points at `.venv-mineru312`.
+
+## 2026-07-24 08:09 — Trunk stack: MinerU + Qwen + Qwen
+- User locked default OCR: layout=mineru, text=vlm (Qwen), formula=vlm (Qwen).
+- Updated `config/ocr_pipeline.yaml`, `task_plan.md`, `findings.md`, design spec trunk layout note.
+- Note: main `.venv` has no `mineru` import yet — full OCR with this default uses `.venv-mineru312`.
+
 ## 2026-07-23 23:35 — Homelab Wave 1 committed; Python 3.12 pin
 - Commit `db664cf`: homelab Wave 1 scripts/ingest/DATA_PLANE, Cursor rules, handbooks, `.python-version`, `requires-python >=3.12,<3.13`
 - Commit `11638c9`: refresh `uv.lock` for 3.12-only markers; `uv sync` updated env
@@ -256,6 +329,19 @@ Via `npx skills add … -g -a cursor -y --copy` → `~/.agents/skills`, then cop
 - `varlock` (wrsmith108/varlock-claude-skill)
 - `systematic-debugging` (obra/superpowers)
 - `pytest-skill` (LambdaTest/agent-skills)
+
+## 2026-07-24 — Task 5: Ingest pageir_v2 + crop_path (done)
+- Brief: `.superpowers/sdd/task-5-brief.md`
+- Scope: `homelab/ingest/ingest.py` + `tests/test_ingest_figures.py` only
+- TDD RED: 2 failed (`pageir_v1`, missing `crop_path`)
+- Implemented: CHUNK_VERSION pageir_v2; crop_relpath→crop_path; payload optional crop_path
+- GREEN: `uv run pytest tests/test_ingest_figures.py -q` → 2 passed
+- Report: `.superpowers/sdd/task-5-report.md`; no commit
+
+## 2026-07-24 — Task 5: Ingest pageir_v2 + crop_path (start)
+- Brief: `.superpowers/sdd/task-5-brief.md`
+- Scope: `homelab/ingest/ingest.py` + `tests/test_ingest_figures.py` only
+- TDD: wrote failing tests for CHUNK_VERSION=pageir_v2 and crop_path mapping
 
 ## 2026-07-22 21:07 — dual-PC design review iteration 2
 - Reviewed the updated design at `~/.gstack/projects/pdf-scaner/a1217-main-design-20260722-210437.md`.

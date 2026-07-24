@@ -7,6 +7,7 @@ from pathlib import Path
 
 from ocr_pipeline.assemble import FinalPolisher
 from ocr_pipeline.cli_report import WarnCollector
+from ocr_pipeline.models import BBox, BlockType, ContentSegment, LayoutBlock, SegmentKind
 from ocr_pipeline.pipeline import PipelineManager
 
 
@@ -37,6 +38,8 @@ class _MarkdownAssembler:
 
 
 class _LinearPolisher:
+    vlm = object()
+
     def polish(self, draft):
         return "POLISHED TXT", FinalPolisher.wrap_tex("POLISHED BODY\n$x=1$"), []
 
@@ -71,3 +74,57 @@ def test_single_short_page_pageir_uses_polished_body_not_stage2_markdown(tmp_pat
     texts = [segment["text"] for segment in data["pages"][0]["segments"]]
     assert "POLISHED BODY" in texts
     assert not any("| --- |" in text for text in texts)
+
+
+def test_pipeline_exports_figures_and_merges_them_into_pageir(tmp_path: Path, monkeypatch):
+    class _FigureLayout(_OnePageLayout):
+        def analyze_page(self, image_path, page):
+            return [
+                LayoutBlock(
+                    "p001_b000",
+                    BlockType.FIGURE,
+                    BBox(0, 0, 10, 10),
+                    0,
+                    page,
+                    image_path,
+                )
+            ]
+
+    captured = {}
+
+    def fake_export_figures(*, blocks, figures_dir, vlm, max_new_tokens=128):
+        captured["blocks"] = blocks
+        captured["figures_dir"] = figures_dir
+        return (
+            [
+                ContentSegment(
+                    kind=SegmentKind.FIGURE,
+                    text="圖說",
+                    source_block_id="p001_b000",
+                    bbox=BBox(0, 0, 10, 10),
+                    crop_relpath="figures/p001_b000.png",
+                )
+            ],
+            [],
+        )
+
+    monkeypatch.setattr("ocr_pipeline.figure_export.export_figures", fake_export_figures)
+    pdf = tmp_path / "one.pdf"
+    pdf.write_bytes(b"%PDF")
+    output = tmp_path / "output"
+    manager = PipelineManager(
+        _FigureLayout(),
+        _IdentityRouter(),
+        _MarkdownAssembler(),
+        _LinearPolisher(),
+        output_dir=output,
+        pages_dir=tmp_path / "pages",
+    )
+
+    result = manager.run(pdf, warns=WarnCollector())
+
+    assert captured["figures_dir"] == output / "one" / "figures"
+    assert captured["blocks"][0].block_id == "p001_b000"
+    assert "(圖: 圖說)" in result.txt
+    data = json.loads(result.pageir_path.read_text(encoding="utf-8"))
+    assert data["pages"][0]["segments"][-1]["kind"] == "figure"

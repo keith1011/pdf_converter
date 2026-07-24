@@ -1,5 +1,56 @@
 # Findings & Decisions
 
+## 2026-07-24 — Task 7: figure+batch contract (docs + regression)
+- `skip_figures=true` → crop FIGURE blocks but **no draft OCR** stitch into Stage2 text (caption path still used when `extract_figures`).
+- `extract_figures=true` (default) → figure **caption path**: crop → Qwen caption → `figures/<id>.png` + PageIR `SegmentKind.FIGURE` with `crop_relpath`.
+- Ingest `chunk_version=pageir_v2` (UUID5 keys differ from `pageir_v1`; re-ingest needs `--reindex` or leaves duplicate-era points).
+- Batch CLI: `uv run python -m ocr_pipeline.batch_export --docs <stem> --publish --ingest --share-root Z:/` (fail-continue unless `--fail-fast`).
+- Full regression: **144 passed** (1 Pydantic deprecation warning from surya).
+
+## 2026-07-24 — Task 6: batch_export CLI
+- Keep `publish` / `ingest_job` as module-level names (initially `None`) so tests can `monkeypatch.setattr("ocr_pipeline.batch_export.*", ...)`.
+- Lazy `_import_homelab()` only when publish/ingest needed; failed publish skips ingest for that doc.
+- Milestone rule: `--ingest` requires `--publish` (raises if `job_dir` missing).
+- **Fix:** ingest may raise `SystemExit`; per-doc handler must catch `(Exception, SystemExit)` or one bad doc aborts the batch. Preflight also rejects ingest-without-publish.
+
+## 2026-07-24 — Task 5: ingest pageir_v2 + crop_path
+- `CHUNK_VERSION` was `pageir_v1`; bump to `pageir_v2` changes UUID5 `point_id` keys (re-ingest needs `--reindex` or leaves duplicate-era points).
+- PageIR stores `crop_relpath`; ingest segment dicts / Qdrant payload use `crop_path` (omit when absent).
+- Focused tests: 2 passed (`tests/test_ingest_figures.py`).
+
+## 2026-07-24 — Task 4: staging and figure publication
+- `publish()` currently flattens every artifact to `src.name`, so nested figure paths cannot be preserved.
+- `validate_done_dict()` accepts nested artifact paths but only enforces on-disk listing for optional top-level PageIR/TeX files; `figures/*.png` needs the same completeness check.
+- `src/ocr_pipeline/job_stage.py` and figure publish tests do not yet exist.
+
+## 2026-07-24 — Task 3: figure pipeline wiring
+- Existing `DynamicRouter` returns skipped FIGURE blocks before cropping; the new contract requires cropping first while keeping `raw_text=""`.
+- `finalize_content_first` currently has no figure merge input, and `PipelineManager` does not call `export_figures`; factory only wires `skip_figures`.
+- TDD tests now require retained figure crops and `figure_segments_by_page` merging into rendered text/PageIR.
+
+## 2026-07-24 — Task 1: PageIR FIGURE + crop_relpath
+- `SegmentKind.FIGURE`, `ContentSegment.crop_relpath` (default None), render `(圖: {text})`, JSON key `crop_relpath`.
+- `apply_integrity_to_page` preserves `crop_relpath` on MATH rebuild.
+- Focused pytest: 11 passed (`test_page_ir_models` + `test_content_first`).
+
+## 2026-07-24 — Fixed prior trunk gaps (skip_figures / MathRouter / mineru uv)
+- `pipeline.skip_figures` → `DynamicRouter.skip_figures` (true: no crop; false: FIGURE via text/VLM).
+- `MathRouter`: removed MinerU package probe; requires `formula_engine` or `vlm_fallback`.
+- uv: `transformers>=4.49,<5` (was 5.14 — blocked MinerU); group `mineru` + `default-groups=["dev","mineru"]`.
+- Main `.venv`: `import mineru` OK (3.4.4). PP-DocLayoutV2 is torch/transformers, not paddle.
+- Full `uv run pytest`: **127 passed**.
+
+## 2026-07-24 — modern-python code check: MinerU + Qwen + Qwen trunk
+- **Wiring OK:** `load_ocr_config()` → `MineruLayoutEngine` + `VlmTextEngine` + `VlmFormulaEngine` + `Qwen25VlClient` (polish).
+- **Fixed earlier:** factory default `layout=mineru`; MinerU figure labels → `FIGURE`.
+- Prior “still open” items above are now closed.
+
+## 2026-07-24 — Trunk stack locked: MinerU + Qwen + Qwen
+- User chose default: `engines.layout=mineru`, `text=vlm`, `formula=vlm`.
+- Rationale: layout bakeoff (equation typing vs DocLayout/Surya) + scorecard (Qwen ≫ mineru-ppocr/got for prose/math).
+- Ops: main `.venv` still has no `mineru` import — OCR with this default → `.venv-mineru312` until optional uv group lands.
+- `question_paper` mode still skips block layout (content-crop + page VLM).
+
 ## 2026-07-23 — uv migrate (modern-python)
 - Source of truth: `pyproject.toml` + `uv.lock`; core deps via `uv add`; groups `dev`/`lint`/`test`/`got`.
 - Torch CUDA via pytorch-cu126 index (`2.13.0+cu126`, cuda True after re-pin).

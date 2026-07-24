@@ -55,3 +55,15 @@ def test_page_ir_holds_ordered_segments():
 def test_integrity_status_includes_repaired_and_fail():
     assert IntegrityStatus.REPAIRED.value == "repaired"
     assert IntegrityStatus.FAIL.value == "fail"
+
+
+def test_content_segment_figure_has_crop_relpath():
+    seg = ContentSegment(
+        kind=SegmentKind.FIGURE,
+        text="圓形面積示意圖",
+        source_block_id="p001_b012",
+        bbox=BBox(1, 2, 3, 4),
+        crop_relpath="figures/p001_b012.png",
+    )
+    assert seg.kind is SegmentKind.FIGURE
+    assert seg.crop_relpath == "figures/p001_b012.png"

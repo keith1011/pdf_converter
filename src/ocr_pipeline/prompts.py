@@ -108,3 +108,11 @@ CONTENT_FIRST_POLISH_PROMPT = f"""你是一個 LaTeX 排版專家。請將以下
 
 # Ship 1: content-first is the active polish header.
 POLISH_PROMPT_HEADER = CONTENT_FIRST_POLISH_PROMPT
+
+FIGURE_CAPTION_PROMPT = """你正在看一張試卷／講義中的圖（圖表、幾何圖、示意圖）。
+
+任務：用一句繁體中文短說明這張圖畫什麼（供題庫檢索）。
+規則：
+- 只輸出一句話，不要編號、不要 markdown、不要「這張圖是」。
+- 不要發明圖中沒有的細節；看不清就寫「圖示（細節不清）」。
+"""

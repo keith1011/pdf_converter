@@ -15,7 +15,7 @@ from qdrant_client.http import models as qm
 COLLECTION = "exam_segments_v1"
 EMBEDDING_MODEL = "nomic-ai/nomic-embed-text-v1.5"
 EMBEDDING_DIM = 768
-CHUNK_VERSION = "pageir_v1"
+CHUNK_VERSION = "pageir_v2"
 UUID_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # URL namespace
 
 
@@ -41,17 +41,19 @@ def load_segments(job_dir: Path, doc_id: str) -> list[dict]:
                 if not text:
                     continue
                 seg_id = f"p{page_index}_s{i}"
-                out.append(
-                    {
-                        "doc_id": doc_id,
-                        "page": page_index,
-                        "segment_id": seg_id,
-                        "kind": seg.get("kind", "prose"),
-                        "text": text,
-                        "tex": tex,
-                        "source_path": str(pageir.name),
-                    }
-                )
+                item = {
+                    "doc_id": doc_id,
+                    "page": page_index,
+                    "segment_id": seg_id,
+                    "kind": seg.get("kind", "prose"),
+                    "text": text,
+                    "tex": tex,
+                    "source_path": str(pageir.name),
+                }
+                crop = seg.get("crop_relpath")
+                if crop:
+                    item["crop_path"] = crop
+                out.append(item)
         return out
 
     # Fallback: whole txt as page 0
@@ -155,6 +157,8 @@ def ingest_job(
             "chunk_version": CHUNK_VERSION,
             "job_id": done["job_id"],
         }
+        if seg.get("crop_path"):
+            payload["crop_path"] = seg["crop_path"]
         points.append(qm.PointStruct(id=pid, vector=vec, payload=payload))
 
     # Upsert in batches

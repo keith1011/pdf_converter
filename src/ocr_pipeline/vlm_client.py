@@ -110,12 +110,8 @@ def run_vlm_generate(
                     ],
                 }
             ]
-            text = processor.apply_chat_template(
-                legacy, tokenize=False, add_generation_prompt=True
-            )
-            inputs = processor(
-                text=[text], images=[pil_image], padding=True, return_tensors="pt"
-            )
+            text = processor.apply_chat_template(legacy, tokenize=False, add_generation_prompt=True)
+            inputs = processor(text=[text], images=[pil_image], padding=True, return_tensors="pt")
 
     inputs = inputs.to(model.device)
     inputs.pop("token_type_ids", None)
