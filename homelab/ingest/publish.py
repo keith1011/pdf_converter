@@ -69,11 +69,36 @@ def publish(
         shutil.copy2(src, dest)
         artifact_meta.append({"path": src.name, "sha256": sha256_file(dest)})
 
+    # Nested figure crops: source_dir/figures/**/*.png → job figures/...
+    figures_root = source_dir / "figures"
+    if figures_root.is_dir():
+        for png in sorted(figures_root.rglob("*.png")):
+            rel = png.relative_to(source_dir).as_posix()
+            dest = incoming / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(png, dest)
+            artifact_meta.append({"path": rel, "sha256": sha256_file(dest)})
+
     # Verify hashes before DONE
     for art in artifact_meta:
         got = sha256_file(incoming / art["path"])
         if got != art["sha256"]:
             raise RuntimeError(f"copy hash mismatch: {art['path']}")
+
+    # pageir crop_relpath must exist on disk
+    pageir_path = incoming / f"{doc_id}.pageir.json"
+    if pageir_path.is_file():
+        pageir = json.loads(pageir_path.read_text(encoding="utf-8"))
+        for page in pageir.get("pages", []):
+            for seg in page.get("segments", []):
+                rel = seg.get("crop_relpath")
+                if not isinstance(rel, str) or not rel.strip():
+                    continue
+                crop = incoming / rel.strip()
+                if not crop.is_file():
+                    raise FileNotFoundError(
+                        f"pageir lists crop_relpath={rel!r} but missing at publish: {crop}"
+                    )
 
     done = {
         "done_schema": 1,

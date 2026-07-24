@@ -83,9 +83,17 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         max_new_tokens=route_tokens,
     )
     crop_dir = Path(paths.get("crop_dir", "output/crops"))
-    router = DynamicRouter(math, text, crop_dir=crop_dir)
-
     pipe_cfg = cfg.get("pipeline") or {}
+    skip_figures = bool(pipe_cfg.get("skip_figures", False))
+    router = DynamicRouter(
+        math,
+        text,
+        crop_dir=crop_dir,
+        vlm=vlm,
+        skip_figures=skip_figures,
+        max_new_tokens_figure=min(128, route_tokens),
+    )
+
     doc_type = str(pipe_cfg.get("doc_type", "marking_scheme")).lower()
     crop_cfg = pipe_cfg.get("content_crop") or {}
     margins = CropMargins(
@@ -115,4 +123,5 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         question_margins=margins,
         question_max_tokens=route_tokens,
         apply_content_crop=apply_content_crop,
+        skip_figures=skip_figures,
     )

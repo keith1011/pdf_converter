@@ -1,5 +1,12 @@
 # Progress Log
 
+## 2026-07-24 — Ingest contract implemented (figure + batch)
+- Slice A: `crop_relpath` in pageir; stage/publish `figures/`; ingest `pageir_v2` + payload `crop_path`.
+- Slice B: `figure_caption.py`; DynamicRouter FIGURE path; finalize merge; trunk `skip_figures: false`.
+- Slice C: `python -m ocr_pipeline.batch_export --docs … --publish --ingest`.
+- Tests: **32 passed** (content_first / job_export / done / ingest_segments / publish_figures / figure_caption / batch_export).
+- Lazy `ocr_pipeline.__init__` + deferred factory import in `run_ocr_pipeline` so light tests need no torch.
+
 ## 2026-07-24 — Explored publish/ingest/pageir/figure surfaces
 - Mapped `homelab/ingest/{done,publish,ingest}.py`, `job_export.py`, pageir writers, content_crop vs block crops, Qdrant upsert fields.
 - Confirmed design gaps vs `2026-07-24-trunk-qwen-ingest-contract-design.md`: no figure segments, no `pageir_v2`, no batch CLI, stage/publish ignore `figures/`.

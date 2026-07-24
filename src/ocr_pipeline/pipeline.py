@@ -18,7 +18,7 @@ from .layout_artifact import (
     load_layout_artifact,
     save_layout_artifact,
 )
-from .models import BBox, PageResult, PipelineResult
+from .models import BBox, ContentSegment, IntegrityStatus, PageResult, PipelineResult, SegmentKind
 from .pipeline_lock import DEFAULT_LOCK_NAME, PipelineLock
 from .question_paper import run_question_paper
 from .routers import DynamicRouter
@@ -40,6 +40,7 @@ class PipelineManager:
         question_margins=None,
         question_max_tokens: int = 1024,
         apply_content_crop: bool = False,
+        skip_figures: bool = False,
     ):
         self.layout = layout
         self.layout_engine = layout_engine
@@ -53,6 +54,7 @@ class PipelineManager:
         self.question_margins = question_margins
         self.question_max_tokens = question_max_tokens
         self.apply_content_crop = bool(apply_content_crop)
+        self.skip_figures = bool(skip_figures)
 
     @staticmethod
     def _safe_stem(path: Path) -> str:
@@ -202,6 +204,17 @@ class PipelineManager:
             # Free layout VRAM before any VLM load (ACCESS_VIOLATION risk on 12GB otherwise)
             self._release_layout()
 
+        # Configure figure crop dir for this artifact stem (session-only on router)
+        figs_dir = self.output_dir / f"{artifact_source}.figures"
+        self.router.figures_dir = figs_dir
+        self.router.vlm = self.vlm
+        self.router.skip_figures = self.skip_figures
+        if not self.skip_figures and figs_dir.exists():
+            # Fresh figures for this run
+            import shutil
+
+            shutil.rmtree(figs_dir)
+
         # --- Stage2 route (VLM) ---
         with timer.section("route"):
             for pr in pages:
@@ -227,6 +240,7 @@ class PipelineManager:
         draft = "\n\n".join(p.draft for p in pages)
 
         page_drafts: list[tuple[int, str, BBox]] = []
+        figure_segments_by_page: dict[int, list[ContentSegment]] = {}
         for pr in pages:
             if pr.tex:
                 text_for_seg = self.polisher.extract_tex_body(pr.tex)
@@ -235,6 +249,26 @@ class PipelineManager:
             else:
                 text_for_seg = pr.draft
             page_drafts.append((pr.page, text_for_seg, BBox(0, 0, 1000, 1000)))
+            fig_segs: list[ContentSegment] = []
+            for b in pr.blocks:
+                if not b.meta.get("is_figure"):
+                    continue
+                caption = (b.raw_text or "").strip()
+                rel = b.meta.get("crop_relpath")
+                if not caption or not isinstance(rel, str):
+                    continue
+                fig_segs.append(
+                    ContentSegment(
+                        kind=SegmentKind.FIGURE,
+                        text=caption,
+                        source_block_id=b.block_id,
+                        bbox=b.bbox,
+                        integrity=IntegrityStatus.OK,
+                        crop_relpath=rel,
+                    )
+                )
+            if fig_segs:
+                figure_segments_by_page[pr.page] = fig_segs
 
         def _wrap(body: str) -> str:
             return sanitize_tex_document(self.polisher.wrap_tex(body))
@@ -246,6 +280,7 @@ class PipelineManager:
                     output_dir=self.output_dir,
                     page_drafts=page_drafts,
                     wrap_tex_fn=_wrap,
+                    figure_segments_by_page=figure_segments_by_page,
                 )
             )
         for w in cf_warns:

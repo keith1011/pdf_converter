@@ -69,7 +69,8 @@ pipeline:
   skip_polish: false
   # Optional artifact suffix, e.g. `123.got-ppocr.tex`.
   output_tag: ""
-  # skip figure/other blocks in routing
-  skip_figures: true
+  # When false: FIGURE/picture blocks get crop PNG under `{stem}.figures/` + Qwen caption → pageir kind=figure.
+  # When true: skip figures (legacy scorecard branches). Trunk default: process figures.
+  skip_figures: false
   # Refuse a second concurrent run_ocr_pipeline (12GB VRAM)
   single_instance_lock: true

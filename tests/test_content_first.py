@@ -90,6 +90,33 @@ def test_write_pageir_json(tmp_path: Path):
     assert data["pages"][0]["page_index"] == 1
     assert data["pages"][0]["segments"][0]["text"] == "hi"
     assert data["pages"][0]["segments"][0]["source_block_id"] == "p1_stitched"
+    assert "crop_relpath" not in data["pages"][0]["segments"][0]
+
+
+def test_render_and_pageir_figure_crop_relpath(tmp_path: Path):
+    page = PageIR(
+        page_index=1,
+        segments=[
+            ContentSegment(
+                kind=SegmentKind.FIGURE,
+                text="直方圖顯示分數分佈",
+                source_block_id="p1_b012",
+                bbox=BBox(10, 20, 300, 400),
+                crop_relpath="figures/p1_b012.png",
+            )
+        ],
+    )
+    txt, tex_body = render_page_ir(page)
+    assert "(圖: 直方圖顯示分數分佈)" in txt
+    assert "(圖: 直方圖顯示分數分佈)" in tex_body
+    assert "includegraphics" not in tex_body
+
+    path = tmp_path / "fig.pageir.json"
+    write_pageir_json(path, [page])
+    seg = json.loads(path.read_text(encoding="utf-8"))["pages"][0]["segments"][0]
+    assert seg["kind"] == "figure"
+    assert seg["crop_relpath"] == "figures/p1_b012.png"
+    assert seg["text"] == "直方圖顯示分數分佈"
 
 
 def test_pipeline_writes_pageir_after_content_first(tmp_path: Path):

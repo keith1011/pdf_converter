@@ -11,11 +11,13 @@ from .prompts import CONTENT_FIRST_POLISH_PROMPT
 
 class DraftAssembler:
     def stitch(self, blocks: list[LayoutBlock]) -> str:
-        parts = [
-            b.raw_text.strip()
-            for b in sorted(blocks, key=lambda x: (x.page, x.order))
-            if b.raw_text.strip()
-        ]
+        parts = []
+        for b in sorted(blocks, key=lambda x: (x.page, x.order)):
+            if b.meta.get("skipped") or b.meta.get("is_figure"):
+                continue
+            text = (b.raw_text or "").strip()
+            if text:
+                parts.append(text)
         return "\n\n".join(parts)
 
 

@@ -4,7 +4,7 @@
 PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--check-compile` PDF；教師 ≤10 分鐘手改後可 reuse。
 
 ## Current Phase
-**Paused 2026-07-24 EOD** — Design locked for trunk Qwen + ingest contract (spec `89d8c37`). Implementation not started; next = writing-plans then figure+batch code.
+**Ingest contract (figure + batch) — implemented 2026-07-24** — Slice A/B/C landed (pageir_v2, figures/, batch_export). Next: optional GPU smoke with VRAM gate; ColPali still backlog.
 
 ## Agent ownership (locked 2026-07-23)
 
@@ -199,10 +199,10 @@ OCR consumes Wave 1 env (`Z:/`, `QDRANT_URL` / `QDRANT_WRITER_KEY`). Do not dual
 | `qdrant-client` 1.18: no `.search()` | 1 | Use `query_points` in `query_agent.py` |
 
 ## Next Action (OCR / TeX lane only)
-1. **Next session:** writing-plans from `2026-07-24-trunk-qwen-ingest-contract-design.md` → implement figure crop+caption + batch publish/ingest
+1. Optional: GPU smoke — one doc with FIGURE → pageir figure + publish+ingest (`--reindex`); VRAM gate first
 2. Do **not** start ColPali
-3. Optional later: commit remaining uncommitted OCR/question_paper/scorecard work when asked
-4. Homelab Wave 2 — **out of lane**
+3. Optional later: commit remaining unrelated OCR/question_paper/scorecard work when asked
+4. Homelab Wave 2 — **out of lane** (already green)
 
 ## Next Action (Homelab / Linux lane only)
 1. Wave 2 **complete** — idle unless ops asked

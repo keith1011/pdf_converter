@@ -128,12 +128,27 @@ class DynamicRouter:
 
     MATH_TYPES = {BlockType.FORMULA, BlockType.EQUATION}
     TEXT_TYPES = {BlockType.TEXT, BlockType.TITLE, BlockType.LIST, BlockType.TABLE}
+    FIGURE_TYPES = {BlockType.FIGURE}
 
-    def __init__(self, math_router: MathRouter, text_router: TextRouter, crop_dir: Path):
+    def __init__(
+        self,
+        math_router: MathRouter,
+        text_router: TextRouter,
+        crop_dir: Path,
+        *,
+        figures_dir: Path | None = None,
+        vlm=None,
+        skip_figures: bool = True,
+        max_new_tokens_figure: int | None = None,
+    ):
         self.math_router = math_router
         self.text_router = text_router
         self.crop_dir = crop_dir
         self.crop_dir.mkdir(parents=True, exist_ok=True)
+        self.figures_dir = figures_dir
+        self.vlm = vlm
+        self.skip_figures = bool(skip_figures)
+        self.max_new_tokens_figure = max_new_tokens_figure
 
     def crop(self, block: LayoutBlock) -> Path:
         from PIL import Image
@@ -156,6 +171,46 @@ class DynamicRouter:
         crop.save(out)
         return out
 
+    def _process_figure(self, block: LayoutBlock) -> LayoutBlock:
+        """Crop + caption; on failure skip this figure only."""
+        from .figure_caption import caption_figure
+
+        assert block.crop_path is not None
+        if self.skip_figures or self.vlm is None or self.figures_dir is None:
+            block.raw_text = ""
+            block.meta["skipped"] = True
+            return block
+
+        self.figures_dir.mkdir(parents=True, exist_ok=True)
+        dest = self.figures_dir / f"{block.block_id}.png"
+        try:
+            from shutil import copy2
+
+            copy2(block.crop_path, dest)
+        except OSError as e:
+            print(f"[figure] copy crop failed {block.block_id}: {e}")
+            block.raw_text = ""
+            block.meta["skipped"] = True
+            return block
+
+        caption = caption_figure(
+            self.vlm,
+            dest,
+            max_new_tokens=self.max_new_tokens_figure or 128,
+        )
+        if not caption:
+            print(f"[figure] skip (no caption): {block.block_id}")
+            block.raw_text = ""
+            block.meta["skipped"] = True
+            # Keep crop file for debugging; omit from pageir
+            return block
+
+        rel = f"figures/{block.block_id}.png"
+        block.raw_text = caption
+        block.meta["crop_relpath"] = rel
+        block.meta["is_figure"] = True
+        return block
+
     def route_block(self, block: LayoutBlock) -> LayoutBlock:
         block.crop_path = self.crop(block)
         print(f"    route {block.block_id} [{block.block_type.value}] order={block.order}")
@@ -163,6 +218,8 @@ class DynamicRouter:
             return self.math_router.process(block)
         if block.block_type in self.TEXT_TYPES:
             return self.text_router.process(block)
+        if block.block_type in self.FIGURE_TYPES:
+            return self._process_figure(block)
         block.raw_text = ""
         block.meta["skipped"] = True
         return block

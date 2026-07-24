@@ -73,21 +73,14 @@ def write_question_artifacts(
     pageir_path = output_dir / f"{source}.pageir.json"
     txt_path.write_text(full_txt, encoding="utf-8")
     tex_path.write_text(full_tex, encoding="utf-8")
+    from .content_first import _segment_to_dict
+
     payload = {
         "doc_type": "question_paper",
         "pages": [
             {
                 "page_index": p.page_index,
-                "segments": [
-                    {
-                        "kind": s.kind.value,
-                        "text": s.text,
-                        "source_block_id": s.source_block_id,
-                        "bbox": [s.bbox.x1, s.bbox.y1, s.bbox.x2, s.bbox.y2],
-                        "integrity": s.integrity.value,
-                    }
-                    for s in p.segments
-                ],
+                "segments": [_segment_to_dict(s) for s in p.segments],
             }
             for p in pages_ir
         ],

@@ -23,6 +23,10 @@ def render_page_ir(page: PageIR) -> tuple[str, str]:
                 lines.append(f"${body}$")
         elif seg.kind is SegmentKind.MARK_NOTE:
             lines.append(f"(分註: {seg.text})")
+        elif seg.kind is SegmentKind.FIGURE:
+            # Caption stub only — never embed PNGs in TeX
+            caption = (seg.text or "").strip() or "(無說明)"
+            lines.append(f"(圖: {caption})")
         else:
             lines.append(seg.text)
     joined = "\n".join(lines)
@@ -69,22 +73,27 @@ def apply_integrity_to_page(page: PageIR) -> tuple[PageIR, list[str]]:
     return PageIR(page_index=page.page_index, segments=new_segments), warnings
 
 
+def _segment_to_dict(s: ContentSegment) -> dict:
+    """Serialize one ContentSegment; include crop_relpath when set."""
+    row: dict = {
+        "kind": s.kind.value,
+        "text": s.text,
+        "source_block_id": s.source_block_id,
+        "bbox": [s.bbox.x1, s.bbox.y1, s.bbox.x2, s.bbox.y2],
+        "integrity": s.integrity.value,
+    }
+    if s.crop_relpath:
+        row["crop_relpath"] = s.crop_relpath
+    return row
+
+
 def write_pageir_json(path: Path, pages: list[PageIR]) -> None:
     """Serialize PageIR list to pageir.json."""
     payload = {
         "pages": [
             {
                 "page_index": p.page_index,
-                "segments": [
-                    {
-                        "kind": s.kind.value,
-                        "text": s.text,
-                        "source_block_id": s.source_block_id,
-                        "bbox": [s.bbox.x1, s.bbox.y1, s.bbox.x2, s.bbox.y2],
-                        "integrity": s.integrity.value,
-                    }
-                    for s in p.segments
-                ],
+                "segments": [_segment_to_dict(s) for s in p.segments],
             }
             for p in pages
         ]
@@ -126,18 +135,26 @@ def finalize_content_first(
     output_dir: Path,
     page_drafts: list[tuple[int, str, BBox]],
     wrap_tex_fn: Callable[[str], str],
+    figure_segments_by_page: dict[int, list[ContentSegment]] | None = None,
 ) -> tuple[str, str, Path, Path, Path, list[str]]:
     """
     Build PageIR per page, render, wrap tex, write txt/tex/pageir.json.
+
+    ``figure_segments_by_page`` appends figure ContentSegments after stitched
+    prose/math segments for that page_index.
 
     Returns (full_txt, full_tex, txt_path, tex_path, pageir_path, warnings).
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     pages_ir: list[PageIR] = []
     all_warnings: list[str] = []
+    figures = figure_segments_by_page or {}
 
     for page_index, stitched_text, page_bbox in page_drafts:
         page, warns = build_page_ir_from_stitched(page_index, stitched_text, page_bbox)
+        extra = figures.get(page_index) or []
+        if extra:
+            page = PageIR(page_index=page.page_index, segments=[*page.segments, *extra])
         pages_ir.append(page)
         all_warnings.extend(warns)
 

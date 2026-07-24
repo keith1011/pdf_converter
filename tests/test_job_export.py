@@ -37,6 +37,64 @@ def test_stage_optional_tex_pageir(tmp_path: Path) -> None:
     assert not (stage / "abc.pageir.json").exists()
 
 
+def test_stage_copies_figures_and_checks_pageir(tmp_path: Path) -> None:
+    stem = "123"
+    (tmp_path / f"{stem}.txt").write_text("hi\n", encoding="utf-8")
+    pageir = {
+        "pages": [
+            {
+                "page_index": 1,
+                "segments": [
+                    {
+                        "kind": "figure",
+                        "text": "圓形圖",
+                        "source_block_id": "p1_b0",
+                        "bbox": [0, 0, 1, 1],
+                        "integrity": "ok",
+                        "crop_relpath": "figures/p1_b0.png",
+                    }
+                ],
+            }
+        ]
+    }
+    (tmp_path / f"{stem}.pageir.json").write_text(
+        __import__("json").dumps(pageir), encoding="utf-8"
+    )
+    figs = tmp_path / f"{stem}.figures"
+    figs.mkdir()
+    (figs / "p1_b0.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+    stage = stage_job_artifacts(output_dir=tmp_path, artifact_stem=stem, doc_id="123")
+    assert (stage / "figures" / "p1_b0.png").is_file()
+
+
+def test_stage_missing_listed_crop_fails(tmp_path: Path) -> None:
+    stem = "123"
+    (tmp_path / f"{stem}.txt").write_text("hi\n", encoding="utf-8")
+    pageir = {
+        "pages": [
+            {
+                "page_index": 1,
+                "segments": [
+                    {
+                        "kind": "figure",
+                        "text": "x",
+                        "source_block_id": "p1_b0",
+                        "bbox": [0, 0, 1, 1],
+                        "integrity": "ok",
+                        "crop_relpath": "figures/missing.png",
+                    }
+                ],
+            }
+        ]
+    }
+    (tmp_path / f"{stem}.pageir.json").write_text(
+        __import__("json").dumps(pageir), encoding="utf-8"
+    )
+    with pytest.raises(FileNotFoundError, match="crop_relpath"):
+        stage_job_artifacts(output_dir=tmp_path, artifact_stem=stem, doc_id="123")
+
+
 def test_publish_and_ingest_order(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     stem = "123.got-ppocr"
     (tmp_path / f"{stem}.txt").write_text("hi\n", encoding="utf-8")

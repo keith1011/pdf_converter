@@ -1,5 +1,11 @@
 # Findings & Decisions
 
+## 2026-07-24 — Ingest contract implementation notes
+- OCR crops live at `output/{stem}.figures/<block_id>.png`; stage remaps to job `figures/`.
+- New Qdrant writes use `chunk_version=pageir_v2` (old `pageir_v1` points remain readable; use `--reindex` per doc).
+- Caption failure skips that figure only; batch continues unless `--fail-fast`.
+- Trunk YAML: `skip_figures: false`; experiment branches may keep `true`.
+
 ## 2026-07-24 — Wave 2 Ollama install lessons (PC-B)
 - Hung `curl | install` left `/usr/local/bin/ollama` without `/usr/local/lib/ollama/llama-server` → generate HTTP 500.
 - No passwordless sudo → userspace tarball `https://ollama.com/download/ollama-linux-amd64.tar.zst` → `~/opt/ollama`.

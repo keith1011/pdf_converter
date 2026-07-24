@@ -30,7 +30,6 @@ from ocr_pipeline.cli_report import (
     print_success_exit,
 )
 from ocr_pipeline.compile_check import maybe_check_compile
-from ocr_pipeline.factory import build_default_pipeline, load_ocr_config
 from ocr_pipeline.job_export import publish_and_ingest
 
 
@@ -130,6 +129,8 @@ def build_parser(pipe_cfg: dict | None = None) -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    from ocr_pipeline.factory import build_default_pipeline, load_ocr_config
+
     # Pre-parse --config so defaults match the selected branch YAML
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument("--config", type=Path, default=None)

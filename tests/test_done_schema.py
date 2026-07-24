@@ -58,3 +58,25 @@ def test_rejects_path_traversal(tmp_path: Path) -> None:
 
 def test_content_hash_stable() -> None:
     assert content_hash("a\r\nb") == content_hash("a\nb")
+
+
+def test_validate_done_with_nested_figure(tmp_path: Path) -> None:
+    txt = tmp_path / "123.txt"
+    txt.write_text("hello\n", encoding="utf-8")
+    fig_dir = tmp_path / "figures"
+    fig_dir.mkdir()
+    png = fig_dir / "p1_b0.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    data = {
+        "done_schema": 1,
+        "job_id": "20260724-123-fig",
+        "doc_id": "123",
+        "created_at": "2026-07-24T00:00:00+00:00",
+        "source_pdf": "123.pdf",
+        "artifacts": [
+            {"path": "123.txt", "sha256": sha256_file(txt)},
+            {"path": "figures/p1_b0.png", "sha256": sha256_file(png)},
+        ],
+        "ocr_pipeline_version": "abc1234",
+    }
+    validate_done_dict(data, job_dir=tmp_path)
