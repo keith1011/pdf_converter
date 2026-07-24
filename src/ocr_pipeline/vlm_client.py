@@ -3,17 +3,24 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import torch
 
 
 @runtime_checkable
 class VlmClient(Protocol):
-    def generate(self, prompt: str, image_path: Path | None = None) -> str: ...
+    def generate(
+        self,
+        prompt: str,
+        image_path: Path | None = None,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> str: ...
 
 
-def _resize(image, max_pixels: int):
+def resize_image(image: Any, max_pixels: int) -> Any:
+    """Downscale PIL image when pixel count exceeds ``max_pixels``."""
     w, h = image.size
     pixels = w * h
     if max_pixels > 0 and pixels > max_pixels:
@@ -22,7 +29,11 @@ def _resize(image, max_pixels: int):
     return image
 
 
-def _strip_fences(text: str) -> str:
+# Back-compat alias used by older call sites / tests
+_resize = resize_image
+
+
+def strip_fences(text: str) -> str:
     text = (text or "").strip()
     if text.startswith("```"):
         import re
@@ -30,6 +41,101 @@ def _strip_fences(text: str) -> str:
         text = re.sub(r"^```(?:\w+)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
     return text.strip()
+
+
+_strip_fences = strip_fences
+
+
+def build_generation_kwargs(*, max_new_tokens: int, temperature: float) -> dict:
+    """
+    Always use greedy decoding for OCR/VLM.
+
+    temperature>0 previously enabled do_sample=True, which triggered a CUDA
+    device-side assert inside torch.multinomial on Qwen2.5-VL 4bit.
+    """
+    _ = temperature  # retained for config/API compatibility
+    return {
+        "max_new_tokens": max_new_tokens,
+        "do_sample": False,
+    }
+
+
+def run_vlm_generate(
+    *,
+    model: Any,
+    processor: Any,
+    prompt: str,
+    image_path: Path | None,
+    max_pixels: int,
+    max_new_tokens: int,
+    temperature: float,
+) -> str:
+    """Shared chat-template → greedy generate → decode path for Qwen/GLM."""
+    content: list[dict] = []
+    pil_image = None
+    if image_path is not None:
+        from PIL import Image
+
+        with Image.open(image_path) as im:
+            pil_image = im.convert("RGB")
+            pil_image.load()
+        pil_image = resize_image(pil_image, max_pixels)
+        content.append({"type": "image", "image": pil_image})
+    content.append({"type": "text", "text": prompt})
+    messages = [{"role": "user", "content": content}]
+
+    try:
+        inputs = processor.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=True,
+            return_tensors="pt",
+        )
+    except Exception:
+        if pil_image is None:
+            text = processor.apply_chat_template(
+                [{"role": "user", "content": prompt}],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            inputs = processor(text=[text], return_tensors="pt")
+        else:
+            legacy = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": prompt},
+                    ],
+                }
+            ]
+            text = processor.apply_chat_template(
+                legacy, tokenize=False, add_generation_prompt=True
+            )
+            inputs = processor(
+                text=[text], images=[pil_image], padding=True, return_tensors="pt"
+            )
+
+    inputs = inputs.to(model.device)
+    inputs.pop("token_type_ids", None)
+
+    gen_kwargs = build_generation_kwargs(
+        max_new_tokens=int(max_new_tokens),
+        temperature=temperature,
+    )
+
+    with torch.inference_mode():
+        generated = model.generate(**inputs, **gen_kwargs)
+    trimmed = generated[:, inputs["input_ids"].shape[1] :]
+    out = processor.batch_decode(
+        trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+    )
+    text = strip_fences(out[0] if out else "")
+    del inputs, generated, trimmed
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return text
 
 
 class Qwen25VlClient:
@@ -40,8 +146,8 @@ class Qwen25VlClient:
         model_name: str = "Qwen/Qwen2.5-VL-7B-Instruct",
         *,
         load_in_4bit: bool = True,
-        max_new_tokens: int = 4096,
-        temperature: float = 0.1,
+        max_new_tokens: int = 2048,
+        temperature: float = 0.0,
         max_pixels: int = 1003520,
     ):
         self.model_name = model_name
@@ -89,73 +195,25 @@ class Qwen25VlClient:
             )
         self.model.eval()
 
-    def generate(self, prompt: str, image_path: Path | None = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        image_path: Path | None = None,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> str:
         self.load()
         assert self.model is not None and self.processor is not None
-
-        content: list[dict] = []
-        pil_image = None
-        if image_path is not None:
-            from PIL import Image
-
-            with Image.open(image_path) as im:
-                pil_image = im.convert("RGB")
-                pil_image.load()
-            pil_image = _resize(pil_image, self.max_pixels)
-            content.append({"type": "image", "image": pil_image})
-        content.append({"type": "text", "text": prompt})
-        messages = [{"role": "user", "content": content}]
-
-        try:
-            inputs = self.processor.apply_chat_template(
-                messages,
-                tokenize=True,
-                add_generation_prompt=True,
-                return_dict=True,
-                return_tensors="pt",
-            )
-        except Exception:
-            if pil_image is None:
-                text = self.processor.apply_chat_template(
-                    [{"role": "user", "content": prompt}],
-                    tokenize=False,
-                    add_generation_prompt=True,
-                )
-                inputs = self.processor(text=[text], return_tensors="pt")
-            else:
-                legacy = [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "image"},
-                            {"type": "text", "text": prompt},
-                        ],
-                    }
-                ]
-                text = self.processor.apply_chat_template(
-                    legacy, tokenize=False, add_generation_prompt=True
-                )
-                inputs = self.processor(
-                    text=[text], images=[pil_image], padding=True, return_tensors="pt"
-                )
-
-        inputs = inputs.to(self.model.device)
-        inputs.pop("token_type_ids", None)
-
-        gen_kwargs: dict = {
-            "max_new_tokens": self.max_new_tokens,
-            "do_sample": self.temperature > 0,
-        }
-        if self.temperature > 0:
-            gen_kwargs["temperature"] = self.temperature
-
-        with torch.inference_mode():
-            generated = self.model.generate(**inputs, **gen_kwargs)
-        trimmed = generated[:, inputs["input_ids"].shape[1] :]
-        out = self.processor.batch_decode(
-            trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        token_budget = self.max_new_tokens if max_new_tokens is None else int(max_new_tokens)
+        return run_vlm_generate(
+            model=self.model,
+            processor=self.processor,
+            prompt=prompt,
+            image_path=image_path,
+            max_pixels=self.max_pixels,
+            max_new_tokens=token_budget,
+            temperature=self.temperature,
         )
-        return _strip_fences(out[0] if out else "")
 
 
 def build_vlm_client(cfg: dict | None = None) -> VlmClient:
@@ -176,8 +234,8 @@ def build_vlm_client(cfg: dict | None = None) -> VlmClient:
         return Glm46VFlashClient(
             model_name=str(src.get("model_name", "zai-org/GLM-4.6V-Flash")),
             load_in_4bit=bool(src.get("load_in_4bit", True)),
-            max_new_tokens=int(src.get("max_new_tokens", 4096)),
-            temperature=float(src.get("temperature", 0.1)),
+            max_new_tokens=int(src.get("max_new_tokens", 2048)),
+            temperature=float(src.get("temperature", 0.0)),
             max_pixels=int(src.get("max_pixels", 1003520)),
         )
 
@@ -186,7 +244,7 @@ def build_vlm_client(cfg: dict | None = None) -> VlmClient:
     return Qwen25VlClient(
         model_name=str(src.get("model_name", "Qwen/Qwen2.5-VL-7B-Instruct")),
         load_in_4bit=bool(src.get("load_in_4bit", True)),
-        max_new_tokens=int(src.get("max_new_tokens", 4096)),
-        temperature=float(src.get("temperature", 0.1)),
+        max_new_tokens=int(src.get("max_new_tokens", 2048)),
+        temperature=float(src.get("temperature", 0.0)),
         max_pixels=int(src.get("max_pixels", 1003520)),
     )

@@ -94,7 +94,7 @@ def slash_to_frac(expr: str) -> str:
                 slash_at = i
                 spaced = True
                 break
-            elif depth == 0 and ch == "/" and not expr[i - 1 : i] == "\\":
+            elif depth == 0 and ch == "/" and expr[i - 1 : i] != "\\":
                 slash_at = i
                 spaced = False
                 break
@@ -180,7 +180,7 @@ def normalize_math_in_tex(tex: str) -> str:
 
 
 _TABULAR_RE = re.compile(
-    r"\\begin\{tabular\*?\}.*?\\end\{tabular\*?\}",
+    r"\\begin\{(?:tabular\*?|longtable)\}.*?\\end\{(?:tabular\*?|longtable)\}",
     flags=re.DOTALL,
 )
 _BR_RE = re.compile(r"<br\s*/?>", flags=re.IGNORECASE)
@@ -224,6 +224,24 @@ def _mark_unpaired_dollars(tex: str) -> str:
     return tex.rstrip() + "\n" + note + "\n"
 
 
+def _ensure_table_packages(tex: str) -> str:
+    """Inject longtable/array if used but missing from preamble."""
+    if "\\begin{longtable}" not in tex:
+        return tex
+    if "\\usepackage{longtable" in tex or "\\usepackage{longtable," in tex:
+        return tex
+    if "longtable" in tex.split("\\begin{document}", 1)[0]:
+        return tex
+    insert = "\\usepackage{longtable,array}\n"
+    m = re.search(r"(\\usepackage\{[^}]*\}\n)", tex)
+    if m:
+        return tex[: m.end()] + insert + tex[m.end() :]
+    m2 = re.search(r"(\\documentclass(?:\[[^\]]*\])?\{[^}]*\}\n)", tex)
+    if m2:
+        return tex[: m2.end()] + insert + tex[m2.end() :]
+    return insert + tex
+
+
 def sanitize_tex_document(tex: str) -> str:
     """
     Compile-friendly post-pass (tabular-aware).
@@ -246,4 +264,4 @@ def sanitize_tex_document(tex: str) -> str:
     tex = _mark_unpaired_dollars(tex)
     for i, tab in enumerate(tabs):
         tex = tex.replace(f"<<<TABULAR{i}>>>", tab)
-    return tex
+    return _ensure_table_packages(tex)

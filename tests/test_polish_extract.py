@@ -25,7 +25,7 @@ hi
     assert "```" not in got
 
 
-def test_parse_uses_extracted_document():
+def test_parse_accepts_extracted_complete_document_without_partial_warning():
     class FakeVlm:
         def generate(self, prompt, image_path=None):
             return (
@@ -38,4 +38,5 @@ def test_parse_uses_extracted_document():
     assert "\\documentclass" in tex
     assert tex.strip().startswith("\\documentclass")
     assert "說明" not in tex
-    assert warn and any("extracted" in w for w in ([warn] if isinstance(warn, str) else warn))
+    assert txt == "x"
+    assert not any("parse partial" in item for item in warn)

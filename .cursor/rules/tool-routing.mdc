@@ -1,0 +1,76 @@
+---
+description: Route tasks to the right Skill + MCP combo for this repo
+alwaysApply: true
+---
+
+# Tool routing — Skills + MCP (PC-A)
+
+Skill = workflow / method. MCP = external tool. Prefer **both** when the table says so. Skip irrelevant tools. Handbooks: `docs/SKILL_HANDBOOK.md`, `docs/MCP_HANDBOOK.md`.
+
+## Always (every non-trivial task)
+
+| Layer | Use |
+|-------|-----|
+| Skill / rule | **planning-with-files** — read/write `task_plan.md`, `findings.md`, `progress.md` |
+| — | Do not rely on TodoWrite alone across turns |
+
+## Domain → Skill + MCP
+
+| Domain | Skill（流程） | MCP（外接） | Notes |
+|--------|---------------|-------------|-------|
+| 套件／框架 API 文件 | — | **context7** | 勿靠過期訓練資料 |
+| 搜網／查證／讀 URL | — | **zero-api-key-web-search** | |
+| 本 repo 誰呼叫誰／架構圖 | **codebase-design**（大改時） | **codebase-memory** | 先 index；程式圖 ≠ 題庫向量 |
+| GitHub PR／issue／遠端碼 | **gstack-ship**／**gstack-review**（發版審） | **github** | 小操作可用 `gh` 備援 |
+| 本專案／`aiworkplace`／`Z:\` 檔案 | — | **filesystem** | 勿繞過 `DONE.json` 寫 jobs |
+| 題庫／向量搜尋 | **qdrant-search-quality**、**evaluate-rag**（調品質時） | **qdrant**（唯讀） | 題庫 collection 多為 `exam_segments_v1`；MCP 預設 `memories` 不同。禁止 Chroma／Cognee／Mengram |
+| OCR／VLM 跑之前／之中／之後 | **planning-with-files**（記 VRAM 決策） | **gpu**（`list_gpus` / `get_gpu_metrics`） | **強制**：每次啟動 OCR 前先查 VRAM；見下方門檻 |
+| Bug／測掛／CUDA | **systematic-debugging** → **gstack-investigate** | **gpu**（VRAM 相關時） | 先根因再修 |
+| 寫／補 pytest | **pytest-skill**、**modern-python** | — | |
+| PDF 讀寫／合併／表單 | **pdf** | — | |
+| arXiv 公式／章節 | — | **arxiv-latex** | |
+| Zotero 文獻／引用 | — | **zotero** | Zotero 桌面須開 |
+| 密鑰／.env／硬編碼 | **varlock**、**insecure-defaults** | — | 勿把 key 寫進 chat／commit |
+| 自建 MCP | **mcp-builder** | （目標服務） | |
+| 產品／雙機架構決策 | **gstack-office-hours** → **gstack-autoplan** | — | 設計文在 `~/.gstack/projects/pdf-scaner/` |
+| 短回覆省 token | **caveman**（建議 **lite**） | — | `stop caveman` 關閉 |
+
+## Soft triggers（使用者不必點名）
+
+- 「查文件／這個 API」→ context7  
+- 「搜網／證實」→ zero-api-key-web-search  
+- 「誰在叫／架構」→ codebase-memory（± codebase-design）  
+- 「PR／issue」→ github（± gstack-ship／review）  
+- 「VRAM／顯存／跑 OCR」→ **gpu**（必查，再決定是否開跑）  
+- 「題庫／Qdrant」→ qdrant +（調參時）qdrant-search-quality  
+- 「bug／掛了／assert」→ systematic-debugging  
+- 「寫測試」→ pytest-skill  
+- 「這個 PDF」→ pdf  
+- 「arXiv」→ arxiv-latex  
+- 「Zotero／引用」→ zotero  
+- 「.env／API key」→ varlock／insecure-defaults  
+- 「架構怎麼切／雙機」→ gstack-office-hours  
+
+## Habits
+
+1. Agent 模式才有完整 MCP／skill 工具環。  
+2. 表上有 Skill **且** MCP → 先讀 skill 方法，再呼叫 MCP 取證。  
+3. MCP 紅燈：簡短說明 → 備援一次（`gh`、本地檔、Shell）。  
+4. 勿安裝第二套向量庫當題庫真相。  
+5. 勿用 filesystem 破壞 B 資料平面契約（`homelab/DATA_PLANE.md`）。  
+6. 不確定用哪個 → 查手冊速查表，勿亂裝新 MCP／skill。  
+7. **OCR lane — GPU gate（RTX 4070 Super 12GB）**  
+   - **Before** `run_ocr_pipeline` / 任何 VLM load：`user-gpu` → `list_gpus`（必要時 `get_gpu_metrics`）。  
+   - **During** long runs：若懷疑卡死／OOM，再查一次；勿並行第二條 OCR。  
+   - **After** layout／失敗：確認 `surya-vllm-*` 已停、used 回落。  
+   - **Adjust by free VRAM**（`total - used`；本機 total ≈ 12282 MiB）：
+
+   | Free MiB | Action |
+   |----------|--------|
+   | ≥ 8000 | 可跑完整 Stage1→3（含 Surya vLLM + Qwen 4bit） |
+   | 4096–7999 | 優先 `--reuse-layout`；或先 `docker stop surya-vllm-*` / `layout.release()` 再 Stage2/3 |
+   | 2048–4095 | 只允許已 release 後的 Stage2/3；勿開 Surya v2；考慮 `--limit 1` smoke |
+   | < 2048 | **不要開跑**；查誰佔 VRAM、停容器／舊 pipeline；等 headroom |
+
+   - 永遠遵守 single-instance lock；`--allow-concurrent` 僅使用者明確要求。  
+   - 把異常 VRAM／調整寫進 `progress.md` / `findings.md`。

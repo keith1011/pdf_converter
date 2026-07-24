@@ -25,11 +25,20 @@ def normalize_display_math(text: str) -> str:
 
 
 class MathRouter:
-    """Formula/Equation -> MinerU/UniMERNet when available; else VlmClient. Body display $$."""
+    """Formula/Equation -> FormulaEngine, with legacy VLM fallback support."""
 
-    def __init__(self, engine: str = "mineru", glm_fallback=None):
+    def __init__(
+        self,
+        engine: str = "mineru",
+        glm_fallback=None,
+        *,
+        formula_engine=None,
+        max_new_tokens: int | None = None,
+    ):
         self.engine = engine
         self.glm_fallback = glm_fallback  # VlmClient (name kept for call-site compat)
+        self.formula_engine = formula_engine
+        self.max_new_tokens = max_new_tokens
         self._ready = False
 
     def _try_init_mineru(self) -> bool:
@@ -52,11 +61,17 @@ class MathRouter:
         return False
 
     def extract_latex(self, crop_path: Path) -> str:
+        if self.formula_engine is not None:
+            return self.formula_engine.ocr(crop_path)
         self._try_init_mineru()
         # TODO: wire concrete MinerU formula OCR when installed
         if self.glm_fallback is None:
             raise RuntimeError("No formula engine available (MinerU missing and no VLM fallback)")
-        raw = self.glm_fallback.generate(MATH_ROUTER_PROMPT, image_path=crop_path)
+        raw = self.glm_fallback.generate(
+            MATH_ROUTER_PROMPT,
+            image_path=crop_path,
+            max_new_tokens=self.max_new_tokens,
+        )
         return normalize_display_math(raw)
 
     def process(self, block: LayoutBlock) -> LayoutBlock:
@@ -67,11 +82,22 @@ class MathRouter:
 
 
 class TextRouter:
-    """Text/Title/List/Table crops -> VlmClient (formulas forced to LaTeX)."""
+    """Text/Title/List/Table crops -> TextEngine (formulas forced to LaTeX)."""
 
-    def __init__(self, vlm, model_name: str = "VlmClient"):
+    def __init__(
+        self,
+        vlm=None,
+        model_name: str = "VlmClient",
+        *,
+        text_engine=None,
+        table_engine=None,
+        max_new_tokens: int | None = None,
+    ):
         self.vlm = vlm
         self.model_name = model_name
+        self.text_engine = text_engine
+        self.table_engine = table_engine
+        self.max_new_tokens = max_new_tokens
 
     def _prompt_for(self, block_type: BlockType) -> str:
         if block_type == BlockType.TABLE:
@@ -80,8 +106,20 @@ class TextRouter:
 
     def process(self, block: LayoutBlock) -> LayoutBlock:
         assert block.crop_path is not None
+        engine = (
+            self.table_engine if block.block_type == BlockType.TABLE else self.text_engine
+        )
+        if engine is not None:
+            block.raw_text = engine.ocr(block.crop_path)
+            return block
+        if self.vlm is None:
+            raise RuntimeError("No text engine available")
         prompt = self._prompt_for(block.block_type)
-        block.raw_text = self.vlm.generate(prompt, image_path=block.crop_path).strip()
+        block.raw_text = self.vlm.generate(
+            prompt,
+            image_path=block.crop_path,
+            max_new_tokens=self.max_new_tokens,
+        ).strip()
         return block
 
 
@@ -90,12 +128,27 @@ class DynamicRouter:
 
     MATH_TYPES = {BlockType.FORMULA, BlockType.EQUATION}
     TEXT_TYPES = {BlockType.TEXT, BlockType.TITLE, BlockType.LIST, BlockType.TABLE}
+    FIGURE_TYPES = {BlockType.FIGURE}
 
-    def __init__(self, math_router: MathRouter, text_router: TextRouter, crop_dir: Path):
+    def __init__(
+        self,
+        math_router: MathRouter,
+        text_router: TextRouter,
+        crop_dir: Path,
+        *,
+        figures_dir: Path | None = None,
+        vlm=None,
+        skip_figures: bool = True,
+        max_new_tokens_figure: int | None = None,
+    ):
         self.math_router = math_router
         self.text_router = text_router
         self.crop_dir = crop_dir
         self.crop_dir.mkdir(parents=True, exist_ok=True)
+        self.figures_dir = figures_dir
+        self.vlm = vlm
+        self.skip_figures = bool(skip_figures)
+        self.max_new_tokens_figure = max_new_tokens_figure
 
     def crop(self, block: LayoutBlock) -> Path:
         from PIL import Image
@@ -118,6 +171,46 @@ class DynamicRouter:
         crop.save(out)
         return out
 
+    def _process_figure(self, block: LayoutBlock) -> LayoutBlock:
+        """Crop + caption; on failure skip this figure only."""
+        from .figure_caption import caption_figure
+
+        assert block.crop_path is not None
+        if self.skip_figures or self.vlm is None or self.figures_dir is None:
+            block.raw_text = ""
+            block.meta["skipped"] = True
+            return block
+
+        self.figures_dir.mkdir(parents=True, exist_ok=True)
+        dest = self.figures_dir / f"{block.block_id}.png"
+        try:
+            from shutil import copy2
+
+            copy2(block.crop_path, dest)
+        except OSError as e:
+            print(f"[figure] copy crop failed {block.block_id}: {e}")
+            block.raw_text = ""
+            block.meta["skipped"] = True
+            return block
+
+        caption = caption_figure(
+            self.vlm,
+            dest,
+            max_new_tokens=self.max_new_tokens_figure or 128,
+        )
+        if not caption:
+            print(f"[figure] skip (no caption): {block.block_id}")
+            block.raw_text = ""
+            block.meta["skipped"] = True
+            # Keep crop file for debugging; omit from pageir
+            return block
+
+        rel = f"figures/{block.block_id}.png"
+        block.raw_text = caption
+        block.meta["crop_relpath"] = rel
+        block.meta["is_figure"] = True
+        return block
+
     def route_block(self, block: LayoutBlock) -> LayoutBlock:
         block.crop_path = self.crop(block)
         print(f"    route {block.block_id} [{block.block_type.value}] order={block.order}")
@@ -125,6 +218,8 @@ class DynamicRouter:
             return self.math_router.process(block)
         if block.block_type in self.TEXT_TYPES:
             return self.text_router.process(block)
+        if block.block_type in self.FIGURE_TYPES:
+            return self._process_figure(block)
         block.raw_text = ""
         block.meta["skipped"] = True
         return block

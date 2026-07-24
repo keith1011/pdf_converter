@@ -6,16 +6,18 @@ import re
 
 from .latex_math import sanitize_tex_document, strip_model_junk
 from .models import LayoutBlock
-from .prompts import POLISH_PROMPT_HEADER
+from .prompts import CONTENT_FIRST_POLISH_PROMPT
 
 
 class DraftAssembler:
     def stitch(self, blocks: list[LayoutBlock]) -> str:
-        parts = [
-            b.raw_text.strip()
-            for b in sorted(blocks, key=lambda x: (x.page, x.order))
-            if b.raw_text.strip()
-        ]
+        parts = []
+        for b in sorted(blocks, key=lambda x: (x.page, x.order)):
+            if b.meta.get("skipped") or b.meta.get("is_figure"):
+                continue
+            text = (b.raw_text or "").strip()
+            if text:
+                parts.append(text)
         return "\n\n".join(parts)
 
 
@@ -28,13 +30,17 @@ class FinalPolisher:
     def __init__(self, vlm):
         self.vlm = vlm
 
+    @staticmethod
+    def prompt_header() -> str:
+        return CONTENT_FIRST_POLISH_PROMPT
+
     def polish(self, draft: str) -> tuple[str, str, list[str]]:
         """
         Returns (txt, tex, warnings).
         Warnings are short utility phrases for WarnCollector (no prefix).
         """
         warns: list[str] = []
-        raw = self.vlm.generate(POLISH_PROMPT_HEADER + draft, image_path=None)
+        raw = self.vlm.generate(self.prompt_header() + draft, image_path=None)
         txt, tex, parse_warn = self._parse(raw, draft)
         if parse_warn:
             warns.append(parse_warn)
@@ -53,7 +59,7 @@ class FinalPolisher:
 
         extracted = self._extract_tex_document(raw)
         if extracted:
-            return draft_fallback.strip(), extracted, "polish parse partial; extracted tex document"
+            return self.extract_tex_body(extracted), extracted, None
 
         return (
             (raw.strip() or draft_fallback.strip()),
@@ -85,6 +91,7 @@ class FinalPolisher:
         return (
             "\\documentclass[12pt]{ctexart}\n"
             "\\usepackage{amsmath,amssymb,booktabs}\n"
+            "\\usepackage{longtable,array}\n"
             "\\usepackage{geometry}\n"
             "\\geometry{margin=2.2cm}\n"
             "\\begin{document}\n\n"

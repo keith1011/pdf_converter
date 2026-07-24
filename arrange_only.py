@@ -6,6 +6,7 @@ Usage:
   .\\.venv\\Scripts\\python.exe arrange_only.py output\\123.txt
   .\\.venv\\Scripts\\python.exe arrange_only.py output\\123.txt --out-prefix output\\123
   .\\.venv\\Scripts\\python.exe arrange_only.py output\\123.txt --no-vlm
+  .\\.venv\\Scripts\\python.exe arrange_only.py output\\123.txt --no-vlm --check-compile
 """
 
 from __future__ import annotations
@@ -25,12 +26,13 @@ from ocr_pipeline.cli_report import (
     print_stage3_start,
     print_success_exit,
 )
+from ocr_pipeline.compile_check import maybe_check_compile
 from ocr_pipeline.factory import load_ocr_config
 from ocr_pipeline.latex_math import sanitize_tex_document, strip_model_junk
 from ocr_pipeline.vlm_client import build_vlm_client
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Stage3 only: polish draft -> txt+tex")
     parser.add_argument("draft", type=Path, help="Input draft/txt path")
     parser.add_argument(
@@ -44,6 +46,16 @@ def main() -> None:
         action="store_true",
         help="Only run local sanitize on an existing .tex beside the draft",
     )
+    parser.add_argument(
+        "--check-compile",
+        action="store_true",
+        help="After writing .tex, run latexmk/xelatex in the output dir (Ship 1.5)",
+    )
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
     args = parser.parse_args()
 
     if not args.draft.exists():
@@ -65,8 +77,12 @@ def main() -> None:
             warns.add("no existing .tex; wrapped draft then sanitized")
         txt_out.write_text(strip_model_junk(draft), encoding="utf-8")
         tex_out.write_text(tex, encoding="utf-8")
+        compile_code = maybe_check_compile(
+            tex_path=tex_out, enabled=args.check_compile, warn_add=warns.add
+        )
         print_success_exit(tex_path=tex_out, warns=warns)
-        raise SystemExit(exit_code_for_tex(tex_out))
+        base = exit_code_for_tex(tex_out)
+        raise SystemExit(base if compile_code == 0 else compile_code)
 
     cfg = load_ocr_config(ROOT / "config" / "ocr_pipeline.yaml")
     vlm = build_vlm_client(cfg)
@@ -77,8 +93,12 @@ def main() -> None:
         warns.add(w)
     txt_out.write_text(txt, encoding="utf-8")
     tex_out.write_text(tex, encoding="utf-8")
+    compile_code = maybe_check_compile(
+        tex_path=tex_out, enabled=args.check_compile, warn_add=warns.add
+    )
     print_success_exit(tex_path=tex_out, warns=warns)
-    raise SystemExit(exit_code_for_tex(tex_out))
+    base = exit_code_for_tex(tex_out)
+    raise SystemExit(base if compile_code == 0 else compile_code)
 
 
 if __name__ == "__main__":

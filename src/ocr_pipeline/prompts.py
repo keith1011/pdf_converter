@@ -44,17 +44,21 @@ TEXT_ROUTER_PROMPT = f"""請提取圖片中的全部文字，保持繁體中文�
 """
 
 
-TABLE_ROUTER_PROMPT = f"""請將圖片中的表格轉成 Markdown 表格。
+TABLE_ROUTER_PROMPT = f"""請將圖片中的「評分表／解題表」轉成直式一行一步的純文字（內容優先）。
 保持繁體中文與英文原貌。
 
 {LATEX_MATH_RULES}
 
-表格儲存格內若有公式，必須用 $...$ 包成標準 LaTeX（例如 $\\frac{{a}}{{b}}$），禁止 $$...$$，禁止 a/b 純文字分數。
-不加任何解釋。
+【內容優先硬性規則 — 全部必須遵守】
+1. 禁止 Markdown 表格（不要用 | --- |）。
+2. 禁止輸出 LaTeX tabular / longtable / \\hline / \\begin{{table}}。
+3. 依閱讀順序逐行輸出：解題步驟、公式、分數註記（如 1M、1A）各佔一行。
+4. 公式用 $...$；禁止把「分」「備註」「1M」「1A」寫進數學模式。
+5. 不加任何解釋、標題或 markdown 圍欄。
 """
 
 
-POLISH_PROMPT_HEADER = f"""你是一個 LaTeX 排版專家。請將以下草稿內容修正並排版。
+POLISH_PROMPT_HEADER_LEGACY = f"""你是一個 LaTeX 排版專家。請將以下草稿內容修正並排版。
 
 {LATEX_MATH_RULES}
 
@@ -75,4 +79,53 @@ POLISH_PROMPT_HEADER = f"""你是一個 LaTeX 排版專家。請將以下草稿�
 （完整可編譯 LaTeX：preamble + \\begin{{document}}...\\end{{document}}）
 
 草稿：
+"""
+
+
+CONTENT_FIRST_POLISH_PROMPT = f"""你是一個 LaTeX 排版專家。請將以下草稿內容修正並排版（內容優先／直式一行一步）。
+
+{LATEX_MATH_RULES}
+
+【內容優先硬性規則 — 全部必須遵守】
+1. 禁止輸出「以下是將圖片…轉換」等說明／開場白；禁止任何「將圖片轉換為文字」類 meta 句。
+2. 不要用 tabular / longtable 當目標排版；改為直式一行一步（正文＋公式依序輸出）。
+3. 每個公式必須完整：禁止在 \\frac 中間用 \\\\ 切開；禁止把「分」「1M」「1A」寫進數學模式。
+4. 行內／直式公式一律用 $...$（不要用表格包公式）。
+5. 繁體中文流暢；修正明顯 OCR 錯字；不要發明草稿沒有的內容。
+6. 文件可用 \\documentclass[12pt]{{ctexart}}，並 \\usepackage{{amsmath,amssymb}}；或至少輸出 document body。
+7. 不要輸出 <|end_of_box|> 或其他特殊 token。
+8. <<<TEX>>> 內只輸出完整 LaTeX 源碼（完整 document 或至少 document body），禁止 markdown 圍欄（```）與前後說明文字。
+
+請嚴格用下列標記輸出兩段（不要其他說明）：
+
+<<<TXT>>>
+（純文本；公式用 $...$；直式一行一步；無開場白）
+<<<TEX>>>
+（完整可編譯 LaTeX document，或至少 \\begin{{document}}...\\end{{document}} 內正文）
+
+草稿：
+"""
+
+# Ship 1: content-first is the active polish header.
+POLISH_PROMPT_HEADER = CONTENT_FIRST_POLISH_PROMPT
+
+
+QUESTION_PAPER_PROMPT = f"""你正在看一張香港 DSE 數學「試卷」頁（已裁掉邊欄）。
+
+任務：只抽出「部／節標題」與「編號題幹」（含分數），不要答題線、不要邊欄警告、不要頁腳／頁碼。
+
+{LATEX_MATH_RULES}
+
+【硬性規則】
+1. 輸出繁體中文；題號用 1. 2. 3. …
+2. 行內公式用 $...$（分數用 \\frac{{...}}{{...}}，指數用 ^{{...}}）。
+3. 保留題末分數，如（3分）或 (3分)。
+4. 禁止輸出：「寫於邊界以外」「將不予評閱」、橫線、頁腳代號（如 2016-DSE-…）、頁碼、說明文字、markdown 圍欄。
+5. 不要發明題目沒有的內容；不要輸出答題空白。
+6. 多題之間換行；部標題單獨一行。
+
+輸出範例格式：
+甲部(1)(35分)
+1.化簡$\\frac{{(x^{{8}}y^{{7}})^{{2}}}}{{x^{{5}}y^{{-6}}}}$，並以正指數表示答案。（3分）
+2.令x成為公式$Ax=(4x+B)C$的主項。(3分)
 """

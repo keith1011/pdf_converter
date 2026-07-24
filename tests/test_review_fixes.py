@@ -5,15 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-
 from ocr_pipeline.assemble import FinalPolisher
 from ocr_pipeline.cli_report import WarnCollector
 from ocr_pipeline.latex_math import sanitize_tex_document
-from ocr_pipeline.models import PageResult
 from ocr_pipeline.pipeline import PipelineManager
 from ocr_pipeline.routers import MathRouter
-
 
 # --- RED targets ---
 

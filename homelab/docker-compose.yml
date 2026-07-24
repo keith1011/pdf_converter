@@ -1,0 +1,26 @@
+# Wave 0–2: Qdrant only on PC-B (Ubuntu Server 24.04)
+# Design: a1217-main-design-20260722-210437.md
+#
+# Wave 2 Ollama is intentionally NOT in this compose file.
+# Run userspace session-only on B: ~/opt/ollama + `ollama serve`
+# (never enable on boot; see DATA_PLANE.md Wave 2).
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.13.2
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      # Bind to LAN IP only — set B_LAN_IP in .env (required)
+      - "${B_LAN_IP:?B_LAN_IP required}:6333:6333"
+      - "${B_LAN_IP:?B_LAN_IP required}:6334:6334"
+    environment:
+      QDRANT__SERVICE__API_KEY: "${QDRANT__SERVICE__API_KEY:?writer key required}"
+      QDRANT__SERVICE__READ_ONLY_API_KEY: "${QDRANT__SERVICE__READ_ONLY_API_KEY:?reader key required}"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    # Keep memory modest on 32GB host shared with future Samba
+    mem_limit: 4g
+
+volumes:
+  qdrant_storage:

@@ -33,7 +33,7 @@ class BBox:
             y2 = y1 + 1
         return x1, y1, x2, y2
 
-    def clamp(self, width: int, height: int) -> "BBox":
+    def clamp(self, width: int, height: int) -> BBox:
         return BBox(
             x1=max(0, min(self.x1, width - 1)),
             y1=max(0, min(self.y1, height - 1)),
@@ -75,4 +75,39 @@ class PipelineResult:
     tex: str = ""
     txt_path: Path | None = None
     tex_path: Path | None = None
+    pageir_path: Path | None = None
     warnings: list[str] = field(default_factory=list)
+
+
+class SegmentKind(str, Enum):
+    PROSE = "prose"
+    MATH = "math"
+    MARK_NOTE = "mark_note"
+    FIGURE = "figure"
+
+
+class IntegrityStatus(str, Enum):
+    OK = "ok"
+    REPAIRED = "repaired"
+    FAIL = "fail"
+
+
+@dataclass
+class ContentSegment:
+    """One linear content unit for content-first Ship 1 / ingest."""
+
+    kind: SegmentKind
+    text: str
+    source_block_id: str
+    bbox: BBox
+    integrity: IntegrityStatus = IntegrityStatus.OK
+    # Figure ingest: job-relative crop path (e.g. figures/p1_s0.png); text = caption/description
+    crop_relpath: str | None = None
+
+
+@dataclass
+class PageIR:
+    """Per-page intermediate representation (ordered segments)."""
+
+    page_index: int
+    segments: list[ContentSegment] = field(default_factory=list)
