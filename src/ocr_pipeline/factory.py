@@ -7,6 +7,7 @@ from pathlib import Path
 import yaml
 
 from .assemble import DraftAssembler, FinalPolisher
+from .content_crop import CropMargins
 from .engines.base import EngineError
 from .engines.doclayout_yolo import DocLayoutYoloEngine
 from .engines.got_formula import GotFormulaEngine
@@ -84,6 +85,17 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     crop_dir = Path(paths.get("crop_dir", "output/crops"))
     router = DynamicRouter(math, text, crop_dir=crop_dir)
 
+    pipe_cfg = cfg.get("pipeline") or {}
+    doc_type = str(pipe_cfg.get("doc_type", "marking_scheme")).lower()
+    crop_cfg = pipe_cfg.get("content_crop") or {}
+    margins = CropMargins(
+        left=float(crop_cfg.get("left", 0.08)),
+        right=float(crop_cfg.get("right", 0.08)),
+        top=float(crop_cfg.get("top", 0.05)),
+        bottom=float(crop_cfg.get("bottom", 0.08)),
+    )
+    apply_content_crop = bool(pipe_cfg.get("apply_content_crop", False))
+
     return PipelineManager(
         layout=layout,
         layout_engine=(
@@ -98,4 +110,9 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         polisher=FinalPolisher(vlm),
         output_dir=Path(paths.get("output_dir", "output")),
         pages_dir=Path(paths.get("pages_dir", "data/pdf_pages")),
+        vlm=vlm,
+        doc_type=doc_type,
+        question_margins=margins,
+        question_max_tokens=route_tokens,
+        apply_content_crop=apply_content_crop,
     )

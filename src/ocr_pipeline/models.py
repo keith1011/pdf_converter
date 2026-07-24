@@ -83,6 +83,7 @@ class SegmentKind(str, Enum):
     PROSE = "prose"
     MATH = "math"
     MARK_NOTE = "mark_note"
+    FIGURE = "figure"
 
 
 class IntegrityStatus(str, Enum):
@@ -93,13 +94,15 @@ class IntegrityStatus(str, Enum):
 
 @dataclass
 class ContentSegment:
-    """One linear content unit for content-first Ship 1."""
+    """One linear content unit for content-first Ship 1 / ingest."""
 
     kind: SegmentKind
     text: str
     source_block_id: str
     bbox: BBox
     integrity: IntegrityStatus = IntegrityStatus.OK
+    # Figure ingest: job-relative crop path (e.g. figures/p1_s0.png); text = caption/description
+    crop_relpath: str | None = None
 
 
 @dataclass

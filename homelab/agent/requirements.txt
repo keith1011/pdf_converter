@@ -1,0 +1,2 @@
+# Optional deps for Wave 2 B agent (install in a venv on B)
+qdrant-client>=1.12.0

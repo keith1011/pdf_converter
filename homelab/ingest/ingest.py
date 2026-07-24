@@ -5,18 +5,33 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import uuid
 from pathlib import Path
 
-from done import content_hash, load_and_validate_done, normalize_text
-from qdrant_client import QdrantClient
-from qdrant_client.http import models as qm
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from homelab.ingest.done import content_hash, load_and_validate_done, normalize_text
 
 COLLECTION = "exam_segments_v1"
 EMBEDDING_MODEL = "nomic-ai/nomic-embed-text-v1.5"
 EMBEDDING_DIM = 768
 CHUNK_VERSION = "pageir_v1"
 UUID_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # URL namespace
+
+
+def _qdrant():
+    try:
+        from qdrant_client import QdrantClient
+        from qdrant_client.http import models as qm
+    except ImportError as e:
+        raise SystemExit(
+            "Install ingest deps: uv sync --group ingest "
+            "(or pip install -r homelab/ingest/requirements.txt)"
+        ) from e
+    return QdrantClient, qm
 
 
 def point_id(doc_id: str, page: int, segment_id: str) -> str:
@@ -76,7 +91,8 @@ def get_embedder():
         from fastembed import TextEmbedding
     except ImportError as e:
         raise SystemExit(
-            "Install ingest deps: pip install -r homelab/ingest/requirements.txt"
+            "Install ingest deps: uv sync --group ingest "
+            "(or pip install -r homelab/ingest/requirements.txt)"
         ) from e
 
     # 768-dim nomic (fastembed full id)
@@ -91,7 +107,7 @@ def embed_texts(model, texts: list[str]) -> list[list[float]]:
     return [list(map(float, v)) for v in vectors]
 
 
-def ensure_collection(client: QdrantClient) -> None:
+def ensure_collection(client, qm) -> None:
     names = {c.name for c in client.get_collections().collections}
     if COLLECTION in names:
         return
@@ -108,6 +124,7 @@ def ingest_job(
     api_key: str,
     reindex: bool = False,
 ) -> tuple[int, int]:
+    QdrantClient, qm = _qdrant()
     done = load_and_validate_done(job_dir)
     doc_id = done["doc_id"]
     segments = load_segments(job_dir, doc_id)
@@ -120,7 +137,7 @@ def ingest_job(
         prefer_grpc=False,
         check_compatibility=False,
     )
-    ensure_collection(client)
+    ensure_collection(client, qm)
 
     if reindex:
         client.delete(
@@ -140,7 +157,7 @@ def ingest_job(
     if vectors and len(vectors[0]) != EMBEDDING_DIM:
         raise RuntimeError(f"expected dim {EMBEDDING_DIM}, got {len(vectors[0])}")
 
-    points: list[qm.PointStruct] = []
+    points = []
     for seg, vec in zip(segments, vectors, strict=True):
         pid = point_id(seg["doc_id"], seg["page"], seg["segment_id"])
         payload = {
@@ -181,7 +198,9 @@ def main() -> None:
     if not args.api_key:
         raise SystemExit("Set --api-key or QDRANT_WRITER_KEY to the writer key")
 
-    n, total = ingest_job(args.job_dir, qdrant_url=args.qdrant_url, api_key=args.api_key, reindex=args.reindex)
+    n, total = ingest_job(
+        args.job_dir, qdrant_url=args.qdrant_url, api_key=args.api_key, reindex=args.reindex
+    )
     print(f"UPSERTED {n}/{total} points into {COLLECTION}")
 
 

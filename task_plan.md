@@ -4,7 +4,16 @@
 PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--check-compile` PDF；教師 ≤10 分鐘手改後可 reuse。
 
 ## Current Phase
-**Python 3.12 locked** — `.python-version`=3.12; `.venv` = CPython 3.12.13; `uv run pytest` 120 passed; torch cu126 + surya OK.
+**Paused 2026-07-24 EOD** — Design locked for trunk Qwen + ingest contract (spec `89d8c37`). Implementation not started; next = writing-plans then figure+batch code.
+
+## Agent ownership (locked 2026-07-23)
+
+| Lane | Owns | Does **not** own |
+|------|------|------------------|
+| **OCR / TeX** | `src/ocr_pipeline/`, engines, scorecard, `.tex`/`.txt`/`.pageir.json`, compile-check, GPU OCR, **CLI `--publish`/`--ingest`** via `job_export` | B SSH/ufw, Qdrant key rotation, Wave 2, compose on B |
+| **Homelab / data plane** | B host, `DATA_PLANE.md`, ufw, Samba, backups, keys, Wave 1 ops | OCR engine quality, TeX draft bar, VLM decode |
+
+OCR consumes Wave 1 env (`Z:/`, `QDRANT_URL` / `QDRANT_WRITER_KEY`). Do not dual-run OCR on 12GB.
 
 ## Routing (locked)
 - Always: planning-with-files (`task_plan.md` / `findings.md` / `progress.md`)
@@ -15,12 +24,16 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | Item | Decision |
 |------|----------|
 | GPU | RTX 4070 Super **12GB** |
+| VRAM gate | Before every OCR run: MCP **gpu** `list_gpus`; adjust per `.cursor/rules/tool-routing.mdc` Habit 7 |
 | Python | **3.12** (`.python-version`; main `.venv` via uv). Do not use 3.14 for this repo. |
 | Default VLM | **Qwen2.5-VL-7B-Instruct 4bit** |
+| **Trunk stack** | **MinerU layout + Qwen text + Qwen formula** (locked 2026-07-24) |
+| Formula knives | got / unimernet opt-in only |
 | Decode | **greedy only** (`do_sample=False`) — sampling → CUDA multinomial assert |
 | Token budgets | Stage3 polish **2048**; Stage2 route **1024** (`max_new_tokens_route`) |
-| Surya v2 | Docker/vLLM OK for layout；**`release()` must `docker stop surya-vllm-*`** before VLM |
-| Order | Layout → **stop vLLM** → Stage2/3 Qwen → content-first finalize → optional compile |
+| Surya v2 | Optional fallback；Docker cold ~221s — not trunk |
+| MinerU runtime | Prefer `.venv-mineru312` until mineru is in main uv group |
+| Order | Layout (MinerU) → Stage2/3 Qwen → content-first finalize → optional compile |
 
 ## Phases
 
@@ -107,6 +120,16 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - **Status:** complete (see Phase 2.8)
 
 ### Phase Ship 2: OCR overlay PDF — pending
+- [ ] `output/<stem>.ocr_overlay.pdf` — page image + OCR text tied to segment bbox / source_block_id
+- Priority P2; after feedstock quality is good enough
+
+### Backlog (from former TODOS.md)
+- [x] `--check-compile` Ship 1.5 — done
+- [x] VlmClient + Qwen 4bit default — done
+- [x] LayoutArtifact `--reuse-layout` — done (Phase 2.8)
+- [x] Tabular marking-scheme Ship 1 bar — **SUPERSEDED** by content-first
+- [ ] Optional: real MinerU/UniMERNet as default math path only if formula *bodies* still dominate edit time (adapters already exist; scorecard first)
+- [ ] CLI consolidation (`python -m ocr_pipeline …`) — deferred (root entry scripts stay for now)
 
 ### Phase H0: Homelab Wave 0 (PC-B data plane) — complete
 - [x] Design APPROVED (`a1217-main-design-20260722-210437.md`)
@@ -126,8 +149,17 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [x] B `ufw` enabled (`UFW_DONE`); Qdrant/Samba scoped to A LAN
 - [x] Keys rotated; A MCP reader + User env writer; reader neg-test PASS (403)
 - [x] Docs: `123` (827) + `wave1demo` (8) = **835** points; re-ingest idempotent
-- [x] Wave 2 stays **closed**
+- [x] Wave 2 stays **closed** until user opens it
 - **Status:** complete (2026-07-23)
+
+### Phase H2: Homelab Wave 2 (B Ollama + read-only agent) — complete
+- Gate (all green before start): Wave 1 + restore drill + ≥2 docs + reader neg-test — **PASS**
+- [x] Ollama on B (userspace `~/opt/ollama`); `llama3.2:1b` + `nomic-embed-text`; CUDA on 1660S; **not** on boot
+- [x] B query agent: Qdrant **reader** + filesystem allowlist **read-only** (`jobs/` DONE trees)
+- [x] Smoke: agent hits `wave1demo`; reader upsert → 403; `WAVE2_B_DONE` written
+- [x] `DATA_PLANE.md` Wave 2 section; compose stays Qdrant-only (no boot Ollama)
+- **Out of scope (still closed):** teacher Chat UI, SearXNG, Grafana, 7B+ on B, MCP gateway
+- **Status:** complete (2026-07-24)
 
 ### Phase 3: Qdrant ingest — after H0 green (was optional-parallel)
 
@@ -147,6 +179,11 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | Stage3 tokens 2048 / Stage2 route 1024 | Full `123.tex` ~15KB; crops rarely need 4k; raise if polish truncates |
 | LayoutArtifact beside page PNGs | `data/pdf_pages/<stem>/layout.json`; `--reuse-layout` skips Surya |
 | Single-instance OCR lock | Dual `run_ocr_pipeline` OOMs on 12GB; lockfile + live-PID check |
+| **Trunk = Qwen2.5-VL** (2026-07-24) | Scorecard + bakeoff; got/unimernet = formula knives only |
+| **Trunk layout = MinerU** (2026-07-24) | Better equation boxes than DocLayout/Surya; ~5s hot; use `.venv-mineru312` for OCR |
+| Ingest = text + figure crop+caption | Embed caption; crop on job; DONE schema 1; `pageir_v2` |
+| Batch publish from `output/` | Multi doc_id sequential; ColPali later only |
+| ColPali deferred | Does not block current ingest |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -157,9 +194,19 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | Stage3 OOM after Surya v2 success | 1 | Call manager.stop (insufficient alone) |
 | Stage3 OOM (same) | 2 | `docker stop surya-vllm-*` + GPU headroom wait in `release()` |
 | Dual `run_ocr_pipeline` PIDs during monitor | note | Avoid concurrent runs on 12GB |
+| B `/usr/local` Ollama missing `llama-server` (hung curl install) | 1 | Userspace install `~/opt/ollama` via `wave2-ollama-userspace.sh` |
+| B `python3 -m venv` fails (no ensurepip / python3-venv) | 1 | Install `uv` in keith home; `uv venv` for agent |
+| `qdrant-client` 1.18: no `.search()` | 1 | Use `query_points` in `query_agent.py` |
 
-## Next Action
-1. Optional: full OCR re-run with `--reuse-layout` / new TABLE_ROUTER (Phase 2.7 leftover)
-2. Phase Ship 2: OCR overlay PDF — only when feedstock quality is enough
-3. Homelab Wave 2 (Ollama / B agent) — **closed** until explicitly requested
-4. Remaining dirty tree: OCR touch files + `uv.lock` + `.superpowers/sdd/` reports (triage / discard noise)
+## Next Action (OCR / TeX lane only)
+1. **Next session:** writing-plans from `2026-07-24-trunk-qwen-ingest-contract-design.md` → implement figure crop+caption + batch publish/ingest
+2. Do **not** start ColPali
+3. Optional later: commit remaining uncommitted OCR/question_paper/scorecard work when asked
+4. Homelab Wave 2 — **out of lane**
+
+## Next Action (Homelab / Linux lane only)
+1. Wave 2 **complete** — idle unless ops asked
+2. Keep Z: / keys / backups healthy; OCR lane may publish/ingest via CLI
+3. Do not edit OCR engines / TeX quality work
+4. Do not start SearXNG / Grafana / teacher Chat on B
+5. After reboot B: `ollama serve` is session-only (not auto); re-start if agent needed

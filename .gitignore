@@ -11,8 +11,12 @@ __pycache__/
 .cache/
 huggingface/
 *.log
+pytest_*.txt
 .DS_Store
 Thumbs.db
+
+# Agent scratch (do not commit)
+.superpowers/
 
 # Data & OCR artifacts
 data/pdf_pages/

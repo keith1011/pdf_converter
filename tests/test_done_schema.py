@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "homelab" / "ingest"))
-
-from done import content_hash, sha256_file, validate_done_dict  # noqa: E402
+from homelab.ingest.done import content_hash, sha256_file, validate_done_dict
 
 
 def test_validate_done_ok(tmp_path: Path) -> None:

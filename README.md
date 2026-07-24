@@ -24,13 +24,15 @@ RTX 4070 Super **12GB**, 32GB RAM. Prefer Surya via Docker/vLLM so it does not t
 
 ## Setup
 
+Python **3.12** (`.python-version`). Prefer **uv**:
+
 ```powershell
 cd "C:\Users\a1217\OneDrive\桌面\aiworkplace\pdf scaner"
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements-ocr-pipeline.txt
-# Optional layout:
-# pip install surya-ocr --no-deps
+uv sync
+uv pip install surya-ocr --no-deps   # optional layout; not in lockfile
 ```
+
+Then run with `uv run …` (or `.venv\Scripts\python.exe`).
 
 ## Teacher loop (golden)
 
@@ -38,7 +40,7 @@ pip install -r requirements-ocr-pipeline.txt
 2. Run one page:
 
 ```powershell
-.\.venv\Scripts\python.exe run_ocr_pipeline.py data\sources\123.pdf --limit 1
+uv run python run_ocr_pipeline.py data\sources\123.pdf --limit 1
 ```
 
 3. CLI ends with (DR1):
@@ -58,8 +60,8 @@ cd output
 latexmk -xelatex 123.tex
 
 # or opt-in after pipeline / arrange:
-.\.venv\Scripts\python.exe arrange_only.py output\123.txt --no-vlm --check-compile
-.\.venv\Scripts\python.exe run_ocr_pipeline.py data\sources\123.pdf --limit 1 --reuse-images --check-compile
+uv run python arrange_only.py output\123.txt --no-vlm --check-compile
+uv run python run_ocr_pipeline.py data\sources\123.pdf --limit 1 --reuse-images --check-compile
 ```
 
 6. Optional: open page PNG under `data/pdf_pages/` beside the PDF and compare.
@@ -80,7 +82,7 @@ Then `Stage3 arrange…` once — **no heartbeat**. Silence for several minutes 
 ### Fast sanitize-only re-run
 
 ```powershell
-.\.venv\Scripts\python.exe arrange_only.py output\123.txt --no-vlm
+uv run python arrange_only.py output\123.txt --no-vlm
 ```
 
 Same success block as the full pipeline (no Stage3 preflight).
@@ -109,17 +111,17 @@ Plain text only — no color, no emoji.
 | `layout.force_backend` | empty = try Surya; `fullpage` forces fallback |
 
 Design detail: `src/ocr_pipeline/DESIGN.md`.  
-Plans: `task_plan.md`, `TODOS.md`.
+Plans: `task_plan.md` (working memory: `findings.md`, `progress.md`, `handoff.md`).
 
 ## Tests
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests -q
+uv run pytest -q
 ```
 
 ## Legacy extract path
 
-Still available for the older draft.jsonl flow — see older sections / `UPGRADE_NOTES.md` if needed:
+Still available for the older `draft.jsonl` flow (see `findings.md` → Legacy extract):
 
 | File | Role |
 |------|------|
@@ -135,8 +137,8 @@ Still available for the older draft.jsonl flow — see older sections / `UPGRADE
 - Do not promote OCR drafts to training sets without review  
 - Optional `--check-compile` on `run_ocr_pipeline.py` / `arrange_only.py` (Ship 1.5): prefers `latexmk -xelatex`, else `xelatex`; writes sibling `.log`; keeps `.tex` on failure  
 
-## Deferred (TODOS)
+## Deferred
 
-- LayoutArtifact resume  
-- OCR overlay PDF (Ship 2)  
-- Real MinerU math path (after golden stable)  
+- OCR overlay PDF (Ship 2) — see `task_plan.md`
+- Scorecard human scoring (formula / prose / compile) for engine branches
+- CLI package entrypoint consolidation (`python -m ocr_pipeline`)

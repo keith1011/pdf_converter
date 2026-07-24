@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .assemble import DraftAssembler, FinalPolisher
 from .cli_report import WarnCollector, print_stage3_start
+from .content_crop import crop_page_images
 from .content_first import finalize_content_first
 from .engines.timing import StageTimer
 from .latex_math import sanitize_tex_document
@@ -19,6 +20,7 @@ from .layout_artifact import (
 )
 from .models import BBox, PageResult, PipelineResult
 from .pipeline_lock import DEFAULT_LOCK_NAME, PipelineLock
+from .question_paper import run_question_paper
 from .routers import DynamicRouter
 
 
@@ -33,6 +35,11 @@ class PipelineManager:
         pages_dir: Path = Path("data/pdf_pages"),
         *,
         layout_engine=None,
+        vlm=None,
+        doc_type: str = "marking_scheme",
+        question_margins=None,
+        question_max_tokens: int = 1024,
+        apply_content_crop: bool = False,
     ):
         self.layout = layout
         self.layout_engine = layout_engine
@@ -41,6 +48,11 @@ class PipelineManager:
         self.polisher = polisher
         self.output_dir = output_dir
         self.pages_dir = pages_dir
+        self.vlm = vlm
+        self.doc_type = (doc_type or "marking_scheme").strip().lower()
+        self.question_margins = question_margins
+        self.question_max_tokens = question_max_tokens
+        self.apply_content_crop = bool(apply_content_crop)
 
     @staticmethod
     def _safe_stem(path: Path) -> str:
@@ -58,6 +70,8 @@ class PipelineManager:
         single_instance_lock: bool = True,
         skip_polish: bool = False,
         output_tag: str = "",
+        doc_type: str | None = None,
+        apply_content_crop: bool | None = None,
         warns: WarnCollector | None = None,
     ) -> PipelineResult:
         """
@@ -68,17 +82,38 @@ class PipelineManager:
 
         When ``reuse_layout`` is True, load ``data/pdf_pages/<stem>/layout.json``
         and skip Surya (still needs page PNGs).
+
+        ``doc_type=question_paper`` skips Surya/block routing and extracts stems only.
+        ``apply_content_crop`` crops to the DSE content box before layout/routing.
         """
         warns = warns or WarnCollector()
         source = self._safe_stem(pdf_path)
         artifact_source = f"{source}.{output_tag}" if output_tag else source
         page_dir = self.pages_dir / source
+        effective_doc_type = (doc_type or self.doc_type or "marking_scheme").strip().lower()
+        do_crop = self.apply_content_crop if apply_content_crop is None else bool(apply_content_crop)
         lock_cm = (
             PipelineLock(self.output_dir / DEFAULT_LOCK_NAME)
             if single_instance_lock
             else nullcontext()
         )
         with lock_cm:
+            if effective_doc_type == "question_paper":
+                if self.vlm is None:
+                    raise RuntimeError("question_paper mode requires a VLM client on PipelineManager")
+                return run_question_paper(
+                    layout=self.layout,
+                    vlm=self.vlm,
+                    pdf_path=pdf_path,
+                    page_dir=page_dir,
+                    output_dir=self.output_dir,
+                    artifact_source=artifact_source,
+                    limit=limit,
+                    overwrite=overwrite,
+                    margins=self.question_margins,
+                    max_new_tokens=self.question_max_tokens,
+                    warns=warns,
+                )
             return self._run_unlocked(
                 pdf_path,
                 source=source,
@@ -88,6 +123,7 @@ class PipelineManager:
                 overwrite=overwrite,
                 reuse_layout=reuse_layout,
                 skip_polish=skip_polish,
+                apply_content_crop=do_crop,
                 warns=warns,
             )
 
@@ -102,18 +138,27 @@ class PipelineManager:
         overwrite: bool,
         reuse_layout: bool,
         skip_polish: bool,
+        apply_content_crop: bool,
         warns: WarnCollector,
     ) -> PipelineResult:
         timer = StageTimer()
         with timer.section("layout"):
             print("=== Stage1: PDF -> images ===")
             if page_dir.exists() and any(page_dir.glob("page_*.png")) and not overwrite:
-                images = sorted(page_dir.glob("page_*.png"))
+                images = sorted(
+                    p for p in page_dir.glob("page_*.png") if ".content." not in p.name
+                )
                 print(f"Reusing images: {page_dir} ({len(images)})")
             else:
                 images = self.layout.pdf_to_images(pdf_path, page_dir, limit=limit)
             if limit > 0:
                 images = images[:limit]
+
+            if apply_content_crop:
+                print("=== Content ROI crop (before layout) ===")
+                images = crop_page_images(images, margins=self.question_margins)
+                for p in images:
+                    print(f"  using {p.name}")
 
             artifact = layout_artifact_path(page_dir)
             pages: list[PageResult] = []
@@ -138,7 +183,7 @@ class PipelineManager:
             else:
                 # --- Stage1 layout only (hold Surya) ---
                 for image_path in images:
-                    m = re.search(r"(\d+)", image_path.stem)
+                    m = re.search(r"(\d+)", image_path.stem.replace(".content", ""))
                     page = int(m.group(1)) if m else len(pages) + 1
                     print(f"\n=== Stage1 layout page {page}: {image_path} ===")
                     blocks = self._analyze(image_path, page)

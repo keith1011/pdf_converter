@@ -1,5 +1,9 @@
-# Wave 0: Qdrant only on PC-B (Ubuntu Server 24.04)
+# Wave 0–2: Qdrant only on PC-B (Ubuntu Server 24.04)
 # Design: a1217-main-design-20260722-210437.md
+#
+# Wave 2 Ollama is intentionally NOT in this compose file.
+# Run userspace session-only on B: ~/opt/ollama + `ollama serve`
+# (never enable on boot; see DATA_PLANE.md Wave 2).
 
 services:
   qdrant:

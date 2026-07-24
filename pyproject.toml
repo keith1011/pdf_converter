@@ -45,6 +45,10 @@ got = [
     "doclayout-yolo>=0.0.4",
     "paddleocr>=2.10.0",
 ]
+ingest = [
+    "fastembed>=0.4.0",
+    "qdrant-client>=1.12.0",
+]
 lint = [
     "ruff>=0.11",
     "ty",
@@ -107,7 +111,7 @@ indent-style = "space"
 docstring-code-format = true
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
 
 [tool.ty.environment]

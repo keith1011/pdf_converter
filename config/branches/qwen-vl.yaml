@@ -1,0 +1,42 @@
+# Branch: qwen-vl — question_paper stem extract (content crop + VLM)
+hardware:
+  gpu: "RTX 4070 Super"
+  vram_gb: 12
+
+layout:
+  dpi: 200
+  device: "cuda"
+  force_backend: ""
+
+engines:
+  layout: "surya"
+  text: "vlm"
+  formula: "vlm"
+
+vlm:
+  backend: "qwen"
+  model_name: "Qwen/Qwen2.5-VL-7B-Instruct"
+  load_in_4bit: true
+  max_new_tokens: 2048
+  max_new_tokens_route: 1024
+  temperature: 0.0
+  max_pixels: 1003520
+
+paths:
+  sources_dir: "data/sources"
+  pages_dir: "data/pdf_pages"
+  output_dir: "output"
+  crop_dir: "output/crops"
+
+pipeline:
+  doc_type: "question_paper"
+  apply_content_crop: true
+  content_crop:
+    left: 0.08
+    right: 0.08
+    top: 0.05
+    bottom: 0.08
+  skip_polish: false
+  output_tag: "qwen-vl"
+  skip_figures: true
+  single_instance_lock: true

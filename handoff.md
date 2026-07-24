@@ -1,13 +1,22 @@
 # Handoff — P-ocr (read this first)
 
-**Date:** 2026-07-23 (architecture rewrite: P-ocr / Approach B)  
+**Date:** 2026-07-23  
 **Repo:** `C:\Users\a1217\OneDrive\桌面\aiworkplace\pdf scaner`  
-**Git:** branch `main` @ `02a68a6` (plus large uncommitted work)  
+**Git:** branch `main` — Homelab Wave 1 + 3.12 pin landed (`db664cf` / `11638c9`); OCR cleanup may still be dirty — always `git status`  
 **Audience:** next Cursor agent — open this, then `task_plan.md` / `findings.md` / `progress.md`, then act.
 
-Do **not** invent state. Prefer filesystem planning docs over chat memory. Never paste API keys (Qdrant reader key in `~/.cursor/mcp.json`; writer keys in B `~/homelab/.env` only).
+Do **not** invent state. Prefer filesystem planning docs over chat memory. Never paste API keys (Qdrant reader key in `~/.cursor/mcp.json`; writer keys in B `~/homelab/.env` + A `%USERPROFILE%\.homelab\qdrant.a.env` only).
 
 **Naming:** the product is **P-ocr** (formerly 北辰). Do not call it an “OCR product.” OCR is only the raw-material pipeline.
+
+## Agent lanes (locked 2026-07-23)
+
+| Agent | Scope | Idle / next |
+|-------|--------|-------------|
+| **OCR / TeX** | Pipeline, engines, drafts, `--check-compile`, GPU OCR, **`--publish` / `--ingest`** | See `task_plan.md` OCR Next Action |
+| **Homelab / Linux data plane** | B host, ufw, Samba, Qdrant keys/backups, Wave 0–2 ops | Wave 1+2 **green**; next = idle unless ops asked |
+
+OCR may publish/ingest using Homelab contracts; does not rotate keys. Homelab does not change OCR engines / TeX quality. Wave 2 (Ollama + B agent) is **green** — session-only, not teacher Chat.
 
 ---
 
@@ -84,27 +93,26 @@ Contract: `homelab/DATA_PLANE.md` + design `DONE.json` schema.
 | Compile path (offline) | Re-finalize `output/123.tex` → **COMPILE_OK**, PDF ~101KB (2026-07-23). Backup: `output/123.tex.bak_tabular` |
 | Segmenter / TABLE_ROUTER defenses | Tabular/CJK/`$$`/`\caption` strip; linear TABLE_ROUTER (no Markdown/tabular) |
 | Unit tests (compile-fix arc) | 23 passed on segmenter / content_first* / formula_integrity |
-| Homelab Wave 0 | Qdrant `http://192.168.1.107:6333`, Samba, MCP reader — **done** |
-| Homelab Wave 1 smoke | Job `20260723-005247-123` → `exam_segments_v1` **827 points**; idempotent re-ingest still 827 |
+| Homelab Wave 0 | Qdrant `http://192.168.1.107:6333`, Samba `Z:`, MCP reader — **done** |
+| Homelab Wave 1 | **green** — SSH key, ufw, RP `20260723T152007Z`, keys rotated, reader 403 neg-test; `exam_segments_v1` **835** (`123`=827 + `wave1demo`=8); commits `db664cf`+ |
 
 ### Broken / watch / uncommitted
 
 | Issue | Notes |
 |-------|--------|
-| Uncommitted critical (important) | Greedy / `layout.release` / TABLE_ROUTER·segmenter defenses / related tests / `config` temperature 0 — **not committed** |
+| Uncommitted OCR (OCR lane) | Greedy / `layout.release` / TABLE_ROUTER·segmenter / related tests / config — verify with `git status` (Homelab agent does not own these) |
 | Full OCR historically failed compile | 14p golden 2026-07-22 exit 12 (tabular-in-math); offline repair green; optional full re-run with new TABLE_ROUTER not done |
-| Qdrant writer key in terminal history | Rotate when convenient (do not commit keys) |
+| Homelab writer-key history | **Rotated** Wave 1; do not re-use old terminal keys |
 
 ### Uncommitted paths (verify with `git status` / diffs)
 
-- `src/ocr_pipeline/vlm_client.py`, `glm_client.py` — greedy `build_generation_kwargs`
-- `src/ocr_pipeline/layout.py` — `_stop_surya_docker_vlms` + GPU headroom wait in `release()`
-- `src/ocr_pipeline/segmenter.py`, `prompts.py` (TABLE_ROUTER linear), `formula_integrity.py`, content-first related
-- `config/ocr_pipeline.yaml` — `temperature: 0.0`
-- Tests: `tests/test_vlm_greedy_decode.py`, `tests/test_layout_release.py`, segmenter/content_first/integrity updates
-- Planning: `task_plan.md`, `findings.md`, `progress.md`
-- Homelab: `homelab/` (compose, ingest, DONE schema, docs)
-- Misc: `.cursor/rules/*`, `golden_run_cf_report.txt`, etc.
+OCR lane (examples — list may drift):
+- `src/ocr_pipeline/vlm_client.py`, `layout.py`, `segmenter.py`, `prompts.py`, …
+- `config/ocr_pipeline.yaml`, related tests
+- Planning docs may be touched by **either** lane — merge carefully; append dated notes, don’t wipe the other’s sections
+
+Homelab lane (already committed for Wave 1):
+- `homelab/**` — Wave 1 package in `db664cf`; contract `homelab/DATA_PLANE.md`
 
 **Always-on:** `.cursor/rules/planning-with-files.mdc` — update `task_plan.md` / `findings.md` / `progress.md` (2-action rule).
 
@@ -348,7 +356,7 @@ Expect after layout release: log line like `[Layout] Stopped docker VLM: surya-v
 - Paste secret keys into git, `handoff.md`, or chat
 - Use Vercel MCP unless user asks
 - Elevate MinerU until formula *bodies* still dominate edit time (Phase 4)
-- Start Wave 2 Chat/SearXNG/Ollama on B without user ask
+- Start teacher Chat / SearXNG / Grafana / always-on Ollama on B (Wave 2 research agent is green; session-only `ollama serve`)
 - Rebuild DeepTutor; treat SearXNG / CI / Grafana as current work
 - Rely on TodoWrite alone — persist in planning files
 

@@ -1,7 +1,71 @@
 # Findings & Decisions
 
+## 2026-07-24 — Wave 2 Ollama install lessons (PC-B)
+- Hung `curl | install` left `/usr/local/bin/ollama` without `/usr/local/lib/ollama/llama-server` → generate HTTP 500.
+- No passwordless sudo → userspace tarball `https://ollama.com/download/ollama-linux-amd64.tar.zst` → `~/opt/ollama`.
+- Ubuntu Server often lacks `python3-venv`; use `uv` for agent venv.
+- `qdrant-client` 1.18 removed `Client.search`; use `query_points`.
+- Boot criterion: no systemd enable; session `ollama serve` only.
+
+## 2026-07-24 — Trunk + ingest contract (brainstorm → spec)
+- Spec: `docs/superpowers/specs/2026-07-24-trunk-qwen-ingest-contract-design.md` (commit `89d8c37`).
+- Approach 1: DONE v1 + pageir figure fields + `chunk_version=pageir_v2`; batch from local output/; ColPali backlog.
+- Stopped EOD before writing-plans / implementation.
+
+## 2026-07-24 — Publish/ingest/pageir exploration (pre-implementation)
+- **DONE v1** already allows nested artifact paths (`figures/...`); validator only requires `{path,sha256}` + `{doc_id}.txt`.
+- **Publish/stage gap:** `publish.py` / `job_export.stage_job_artifacts` only copy flat `{doc}.{txt,tex,pageir.json}` — no `figures/` tree.
+- **Ingest gap:** `CHUNK_VERSION=pageir_v1`; no `crop_path` payload; embeds `seg.text` only; ignores `crop_relpath`.
+- **PageIR gap:** `ContentSegment.crop_relpath` + `SegmentKind.FIGURE` exist in `models.py` but `write_pageir_json` does not emit `crop_relpath`; no OCR path creates figure segments.
+- **Figure routing:** `DynamicRouter` skips FIGURE/OTHER (`raw_text=""`, `meta.skipped`); config `skip_figures: true` is unused in Python. `content_crop.py` = page DSE box only, not figure crops for jobs.
+- **Batch:** no `batch_export` module yet; per-doc `--publish/--ingest` on `run_ocr_pipeline.py` only.
+
+## 2026-07-24 — Layout bakeoff on `789` content PNG
+
+Same image: `data/pdf_pages/789/page_001.content.png`. Script: `scripts/layout_bakeoff_789.py`. Reports: `output/layout_bakeoff_789/*.json`.
+
+| Engine | layout_s | blocks | Types | Formula routing |
+|--------|----------|--------|-------|-----------------|
+| **mineru** | **5.059** | 4 | title1 text2 **equation1** | Best: emits `equation` for Q1 frac |
+| **doclayout_yolo** | **5.126** | 6 | title1 text3 other2 | Finds formula_caption but mapped → **other** (router skips) |
+| **surya** v2 | **220.915** | 5 | title1 text2 other2 | Docker/vLLM **cold start**; Form/other for answer lines; no `equation` type |
+
+**Speed (this host, cold):** MinerU ≈ DocLayout (~5s) ≫ Surya (~221s cold). YOLO log alone ~50ms inference after load.
+
+**Precision (DSE stems / formula boxes):** MinerU > DocLayout ≈ Surya for downstream math routing on this page.
+
+## 2026-07-24 — 789 three-branch scorecard (content crop)
+- Content crop applied to **qwen-vl** (question_paper VLM) and **got/mineru** (engine stacks + skip_polish).
+- On exam stems, VLM stem prompt dominates; PP-OCR stacks still shatter formulas without that prompt.
+- Timings nearly tied (~23–26s); quality ranking independent of speed.
+
+## 2026-07-24 — question_paper extraction
+- Goal: DSE exam pages → section header + numbered stems with inline `$...$` only (drop margin warnings / answer lines / footer).
+- Path: render → OpenCV/margin content crop → one VLM call/page (`QUESTION_PAPER_PROMPT`); no Surya block route.
+- Verified on `dse pp/789.pdf` → `output/789.qp.txt` matches user example (minor spacing).
+
+## 2026-07-23 — Branch scorecard (agent-assisted human fill)
+- qwen-vl wins on formula edits / prose min / compile; experiment stacks fail compile under skip_polish.
+- mineru UniMERNet formula *bodies* > got plain-text shards when model fires; still not ≤10 min teacher bar on page1.
+- Decision: keep **Surya+Qwen** as default feedstock path; optional engines stay experiments until full-doc + polish scorecard.
+
+## 2026-07-23 — OCR GPU MCP gate
+- Before every OCR/VLM run: `user-gpu` `list_gpus` / `get_gpu_metrics`.
+- Thresholds (free MiB): ≥8k full run; 4–8k prefer `--reuse-layout` or stop surya first; 2–4k Stage2/3 only; <2k do not start.
+- Snapshot 2026-07-23 23:56: used **1678** / 12282 MiB (~10.6 GiB free) — clear to run.
+- Locked in `.cursor/rules/tool-routing.mdc` Habit 7.
+
+## 2026-07-23 — Agent ownership split
+- OCR/TeX agent: feedstock quality + **CLI `--publish`/`--ingest`** (`job_export` stages tagged → `{doc_id}.*`, calls `homelab.ingest`).
+- Homelab agent: B host, ufw, key rotation, backups, Wave 2. Does not change OCR engines.
+- Env OCR reads: `Z:/`, `QDRANT_URL`, `QDRANT_WRITER_KEY`. Deps: `uv sync --group ingest`.
+
+## 2026-07-23 — OCR publish/ingest bridge
+- `output_tag` artifacts (`123.got-ppocr.txt`) are not DONE-named; staging copies to `output/.publish_stage/{doc_id}/`.
+- `homelab.ingest` is importable (`pythonpath = ["src", "."]`); scripts still bootstrap repo root on `sys.path`.
+
 ## 2026-07-23 — uv migrate (modern-python)
-- Source of truth: `pyproject.toml` + `uv.lock`; core deps via `uv add`; groups `dev`/`lint`/`test`/`got`.
+- Source of truth: `pyproject.toml` + `uv.lock`; core deps via `uv add`; groups `dev`/`lint`/`test`/`got`/`ingest`.
 - Torch CUDA via pytorch-cu126 index (`2.13.0+cu126`, cuda True after re-pin).
 - MinerU **not** in main lock (Py3.14 + transformers 5 + fasttext MSVC) — keep `.venv-mineru312`.
 - `surya-ocr` still `uv pip install surya-ocr --no-deps` (not locked; uv sync removes it).
@@ -11,6 +75,12 @@
 - Root cause of SSH block: A pubkey not in B `authorized_keys` until `install-pc-a-key.sh`.
 - Backup script must hit `http://$B_LAN_IP:6333` (not loopback); download snapshots via REST, not `docker cp`.
 - Evidence: RP `20260723T152007Z`; points 835; reader upsert/delete 403; ufw ENABLED; Wave 2 deferred.
+
+## Legacy extract path (historical — from UPGRADE_NOTES.md)
+- Older flow: `extract_questions.py` → `data/draft.jsonl` → `jsonl_to_latex.py` (GLM-era notes).
+- Prefer `run_ocr_pipeline.py` / content-first for marking schemes.
+- Known legacy pitfalls (still relevant): Chinese path → open via PIL not `file://`; YAML `256*28*28` must be int; short (a)(b) merge via prompts / `merge_draft_subparts.py`.
+- AIbuliding LoRA training remains a separate consumer of promoted drafts — do not auto-promote OCR output.
 
 ## Homelab Wave 1 blocker (2026-07-23) — resolved
 - A→B SSH: host key OK after `StrictHostKeyChecking=accept-new`; auth still **Permission denied** until B installs `Z:\backups\ssh-bootstrap\pc-a.pub` via `install-pc-a-key.sh`.

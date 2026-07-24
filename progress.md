@@ -1,5 +1,74 @@
 # Progress Log
 
+## 2026-07-24 — Explored publish/ingest/pageir/figure surfaces
+- Mapped `homelab/ingest/{done,publish,ingest}.py`, `job_export.py`, pageir writers, content_crop vs block crops, Qdrant upsert fields.
+- Confirmed design gaps vs `2026-07-24-trunk-qwen-ingest-contract-design.md`: no figure segments, no `pageir_v2`, no batch CLI, stage/publish ignore `figures/`.
+- Logged details in `findings.md`.
+
+## 2026-07-24 ~06:44 — Homelab Wave 2 complete (user asleep; SSH hung)
+- Fixed broken system Ollama (missing `llama-server`) via userspace `~/opt/ollama` (0.32.3).
+- Models: `llama3.2:1b` + `nomic-embed-text`; CUDA on GTX 1660 SUPER; **not** on boot.
+- Agent smoke PASS: reader upsert 403; hits `wave1demo`; answer returned.
+- Flag: `/data/pdf-scaner/backups/wave1-scripts/WAVE2_B_DONE` = `2026-07-23T22:44:15Z`.
+- Docs: `DATA_PLANE.md` Wave 2 green; compose stays Qdrant-only; Phase H2 complete.
+
+## 2026-07-24 00:55 — Stop for the day (brainstorm locked)
+- Spec approved + committed: `docs/superpowers/specs/2026-07-24-trunk-qwen-ingest-contract-design.md` (`89d8c37`).
+- Locks: trunk **Qwen2.5-VL**; ingest = text + figure crop+caption (DONE v1, `pageir_v2`); batch publish from `output/`; formula knives only; **ColPali deferred**.
+- **Next session:** writing-plans → implement figure path + batch CLI (do not start ColPali).
+- Earlier today: question_paper mode, 789×3 scorecard, layout bakeoff (MinerU≈DocLayout ~5s; MinerU best formula typing; Surya cold ~221s).
+
+## 2026-07-24 00:42 — Layout Stage1 bakeoff (789 content PNG)
+- DocLayout 5.126s / 6 blocks (formula→other); MinerU 5.059s / 4 blocks (**equation**); Surya v2 220.9s cold Docker / 5 blocks (no equation).
+- Verdict: **fastest ≈ MinerU & DocLayout**; **most precise for formula routing = MinerU**; Surya cold-start not comparable for speed.
+
+## 2026-07-24 00:27 — 789.pdf full (1p) × 3 branches + scorecard
+- Clarified: earlier only Qwen had `question_paper`; now **all three** use content crop via `config/branches/*.yaml`.
+- Copied `data/sources/789.pdf` (1 page = full doc).
+- Runs (VRAM clear ~1.3 GiB used before each):
+  - qwen-vl question_paper: total **23.460s** → near-golden stems, compile pass
+  - got-ppocr crop+engines: total **25.365s** → broken formulas, compile pass
+  - mineru-ppocr crop+engines: total **25.555s** → one good frac, prose messy, compile pass
+- Scorecard section A updated in `docs/superpowers/evals/p-ocr-branch-scorecard.md`. Rank: qwen ≫ mineru > got.
+
+## 2026-07-24 00:19 — question_paper mode (789.pdf smoke)
+- Added `content_crop.py`, `question_paper.py`, `QUESTION_PAPER_PROMPT`, `--doc-type question_paper`.
+- Unit tests: `tests/test_question_paper.py` **7 passed**.
+- Smoke: VRAM pre-check ~2.0/12.3 GiB used (OK) → `789.pdf` limit-1 → `output/789.qp.txt`:
+  - 甲部(1)(35分) + Q1 frac + Q2 Ax=(4x+B)C; no margin warning. total≈58.4s.
+- Default `doc_type` remains `marking_scheme`.
+
+## 2026-07-23 23:58 — Human scorecard filled (qwen / got / mineru)
+- Filled `docs/superpowers/evals/p-ocr-branch-scorecard.md`.
+- Rank: **qwen-vl** (12 formula / 7 min prose / compile pass) ≫ mineru-ppocr (14 / 10 / fail, limit-1) > got-ppocr (22 / 12 / fail, limit-1).
+- Caveat: got/mineru are limit-1 + skip_polish; not full-doc vs qwen.
+- VRAM pre-check: 1757/12282 MiB free OK (no re-OCR this step).
+
+## 2026-07-23 23:56 — OCR must use GPU MCP before runs
+- Locked Habit 7 in `.cursor/rules/tool-routing.mdc`: pre/mid/post OCR VRAM checks + free-MiB adjust table.
+- Live check: RTX 4070 SUPER used 1678/12282 MiB — headroom OK.
+
+## 2026-07-23 23:55 — Hand-smoke publish→ingest (no OCR re-run)
+- Loaded `%USERPROFILE%\.homelab\qdrant.a.env`; staged existing `output/123.*`
+- `PUBLISHED Z:\jobs\20260723-155417-123` → `UPSERTED 801/801` into `exam_segments_v1` (exit 0)
+- Bridge verified live; next: human scorecard or commit e2e when asked
+
+## 2026-07-23 23:47 — OCR → publish → ingest e2e
+- Added `src/ocr_pipeline/job_export.py` (stage tagged artifacts → `{doc_id}.*`, call publish/ingest).
+- `run_ocr_pipeline.py`: `--doc-id`, `--publish`, `--ingest`, `--share-root`, `--job-dir`, `--reindex`.
+- `homelab.ingest` importable; `uv` group `ingest` (qdrant-client, fastembed); qdrant import lazy.
+- Tests: `test_job_export.py` + updated `test_done_schema.py` → **10 passed**. No live Z:/Qdrant in CI.
+
+## 2026-07-23 23:41 — Agent lane split
+- User locked ownership: **OCR agent = OCR + TeX output only**; **Homelab agent = Linux / data plane**.
+- Recorded in `task_plan.md` (both Next Action sections) and `handoff.md` (Agent lanes + Wave 1 green 835).
+- Homelab agent: idle on Wave 1; Wave 2 closed; will not touch engines/TeX.
+
+## 2026-07-23 — Repo cleanup (A+B delete, D integrate)
+- Deleted: pytest/golden logs, `golden_run_cf_report.txt`, `2015ans.pdf`, `.superpowers/`, output install/sync logs; cleared OneDrive phantom M files.
+- Integrated: `TODOS.md` → `task_plan.md` backlog; `UPGRADE_NOTES.md` → `findings.md`; README → uv.
+- Deferred: root CLI → `python -m ocr_pipeline`. `.gitignore` adds `pytest_*.txt`, `.superpowers/`.
+
 ## 2026-07-23 23:35 — Homelab Wave 1 committed; Python 3.12 pin
 - Commit `db664cf`: homelab Wave 1 scripts/ingest/DATA_PLANE, Cursor rules, handbooks, `.python-version`, `requires-python >=3.12,<3.13`
 - Commit `11638c9`: refresh `uv.lock` for 3.12-only markers; `uv sync` updated env

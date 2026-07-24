@@ -1,6 +1,6 @@
-# Data plane contract (Wave 0–1)
+# Data plane contract (Wave 0–2)
 
-Status: **Wave 1 green** (2026-07-23). Wave 2 (Ollama / B agent) stays **closed**.
+Status: **Wave 2 green** (2026-07-24). Wave 1 remains green underneath.
 
 ## Endpoints
 
@@ -34,7 +34,7 @@ Status: **Wave 1 green** (2026-07-23). Wave 2 (Ollama / B agent) stays **closed*
 |-------|------|--------|
 | ingest CLI | A | writer key (`QDRANT_WRITER_KEY`) |
 | Cursor `user-qdrant` MCP | A | reader key only |
-| B Ollama agent | B (Wave 2+) | reader key; default OFF — **not started** |
+| B Ollama agent | B (Wave 2) | reader key; **session-only** `ollama serve` (not on boot) |
 
 ## Topology
 
@@ -90,4 +90,40 @@ $env:QDRANT_URL = "http://192.168.1.107:6333"
 - [x] RP `20260723T152007Z` + restore-drill logged
 - [x] Reader neg-test PASS; keys rotated
 - [x] ≥2 `doc_id` ingested (`123`=827, `wave1demo`=8, total **835**); re-ingest idempotent
-- [x] This file Status → Wave 1 green; Wave 2 closed
+- [x] This file Status → Wave 1 green; Wave 2 closed (superseded by Wave 2 section below)
+
+## Wave 2 (B Ollama + read-only agent)
+
+**Done flag:** `/data/pdf-scaner/backups/wave1-scripts/WAVE2_B_DONE` (`2026-07-23T22:44:15Z`)
+
+| Item | Value |
+|------|--------|
+| GPU | GTX 1660 SUPER (CUDA OK in ollama log) |
+| Ollama install | **Userspace** `~/opt/ollama` + `~/bin/ollama` (v0.32.3) — system `/usr/local` was incomplete (missing `llama-server`) |
+| Boot | **OFF** — no `ollama.service` enabled; start with `ollama serve` in a session |
+| Chat model | `llama3.2:1b` (≤4GB VRAM budget) |
+| Embed model | `nomic-embed-text` (768-d, matches `exam_segments_v1`) |
+| Agent | `~/homelab/agent/query_agent.py` (uv venv; Qdrant **reader**; jobs allowlist read-only) |
+
+### Start / stop (B)
+
+```bash
+export PATH="$HOME/bin:$HOME/opt/ollama/bin:$PATH"
+export OLLAMA_LIBRARY_PATH="$HOME/opt/ollama/lib/ollama"
+ollama serve   # session only; Ctrl-C or pkill ollama to stop
+cd ~/homelab/agent && . .venv/bin/activate
+python query_agent.py "wave1demo"
+```
+
+Scripts: `homelab/scripts/wave2-ollama-userspace.sh`, `wave2-finish.sh`.
+
+### Wave 2 acceptance
+
+- [x] Ollama API generate smoke → `OK.`
+- [x] Agent: reader upsert probe **PASS** (403); hits from `wave1demo`; answer returned
+- [x] Not enabled on boot (`systemctl is-enabled ollama` → not-found)
+- [x] Out of scope still closed: teacher Chat UI, SearXNG, Grafana, 7B+ on B, MCP gateway
+
+### Compose note
+
+`homelab/docker-compose.yml` stays **Qdrant-only**. Do **not** add an always-on Ollama service. Optional later profile may document userspace start only.

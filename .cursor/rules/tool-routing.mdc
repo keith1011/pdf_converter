@@ -24,7 +24,7 @@ Skill = workflow / method. MCP = external tool. Prefer **both** when the table s
 | GitHub PR／issue／遠端碼 | **gstack-ship**／**gstack-review**（發版審） | **github** | 小操作可用 `gh` 備援 |
 | 本專案／`aiworkplace`／`Z:\` 檔案 | — | **filesystem** | 勿繞過 `DONE.json` 寫 jobs |
 | 題庫／向量搜尋 | **qdrant-search-quality**、**evaluate-rag**（調品質時） | **qdrant**（唯讀） | 題庫 collection 多為 `exam_segments_v1`；MCP 預設 `memories` 不同。禁止 Chroma／Cognee／Mengram |
-| OCR／VLM 前看顯存 | **systematic-debugging**（若已 OOM／assert） | **gpu** | Layout 後須 `release()` 停 `surya-vllm-*` |
+| OCR／VLM 跑之前／之中／之後 | **planning-with-files**（記 VRAM 決策） | **gpu**（`list_gpus` / `get_gpu_metrics`） | **強制**：每次啟動 OCR 前先查 VRAM；見下方門檻 |
 | Bug／測掛／CUDA | **systematic-debugging** → **gstack-investigate** | **gpu**（VRAM 相關時） | 先根因再修 |
 | 寫／補 pytest | **pytest-skill**、**modern-python** | — | |
 | PDF 讀寫／合併／表單 | **pdf** | — | |
@@ -41,7 +41,7 @@ Skill = workflow / method. MCP = external tool. Prefer **both** when the table s
 - 「搜網／證實」→ zero-api-key-web-search  
 - 「誰在叫／架構」→ codebase-memory（± codebase-design）  
 - 「PR／issue」→ github（± gstack-ship／review）  
-- 「VRAM／顯存」→ gpu  
+- 「VRAM／顯存／跑 OCR」→ **gpu**（必查，再決定是否開跑）  
 - 「題庫／Qdrant」→ qdrant +（調參時）qdrant-search-quality  
 - 「bug／掛了／assert」→ systematic-debugging  
 - 「寫測試」→ pytest-skill  
@@ -58,4 +58,19 @@ Skill = workflow / method. MCP = external tool. Prefer **both** when the table s
 3. MCP 紅燈：簡短說明 → 備援一次（`gh`、本地檔、Shell）。  
 4. 勿安裝第二套向量庫當題庫真相。  
 5. 勿用 filesystem 破壞 B 資料平面契約（`homelab/DATA_PLANE.md`）。  
-6. 不確定用哪個 → 查手冊速查表，勿亂裝新 MCP／skill。
+6. 不確定用哪個 → 查手冊速查表，勿亂裝新 MCP／skill。  
+7. **OCR lane — GPU gate（RTX 4070 Super 12GB）**  
+   - **Before** `run_ocr_pipeline` / 任何 VLM load：`user-gpu` → `list_gpus`（必要時 `get_gpu_metrics`）。  
+   - **During** long runs：若懷疑卡死／OOM，再查一次；勿並行第二條 OCR。  
+   - **After** layout／失敗：確認 `surya-vllm-*` 已停、used 回落。  
+   - **Adjust by free VRAM**（`total - used`；本機 total ≈ 12282 MiB）：
+
+   | Free MiB | Action |
+   |----------|--------|
+   | ≥ 8000 | 可跑完整 Stage1→3（含 Surya vLLM + Qwen 4bit） |
+   | 4096–7999 | 優先 `--reuse-layout`；或先 `docker stop surya-vllm-*` / `layout.release()` 再 Stage2/3 |
+   | 2048–4095 | 只允許已 release 後的 Stage2/3；勿開 Surya v2；考慮 `--limit 1` smoke |
+   | < 2048 | **不要開跑**；查誰佔 VRAM、停容器／舊 pipeline；等 headroom |
+
+   - 永遠遵守 single-instance lock；`--allow-concurrent` 僅使用者明確要求。  
+   - 把異常 VRAM／調整寫進 `progress.md` / `findings.md`。

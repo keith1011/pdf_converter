@@ -83,7 +83,9 @@
 
 ### gpu
 - Docker：`ghcr.io/pmady/gpu-mcp-server`。
-- OCR 前看 free VRAM；Surya 沒 release 會佔滿。
+- **每次** OCR／VLM：先 `list_gpus`（必要時 `get_gpu_metrics`）；門檻與調整見 `.cursor/rules/tool-routing.mdc` Habit 7。
+- Surya 沒 `release()`／`docker stop surya-vllm-*` 會佔滿 12GB → Stage3 OOM。
+- free < 2048 MiB：不要開跑；4–8 GiB free：優先 `--reuse-layout`。
 
 ### arxiv-latex
 - 給 id（如 `2401.12345`）拿 LaTeX／章節；數學比 HTML 準。

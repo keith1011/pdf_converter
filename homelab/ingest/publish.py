@@ -6,10 +6,15 @@ import argparse
 import json
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from done import sha256_file, validate_done_dict
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from homelab.ingest.done import sha256_file, validate_done_dict
 
 
 def _git_sha(repo: Path) -> str:
@@ -77,7 +82,9 @@ def publish(
         "created_at": datetime.now(timezone.utc).isoformat(),
         "source_pdf": Path(pdf_name).name,
         "artifacts": artifact_meta,
-        "ocr_pipeline_version": _git_sha(source_dir.parent if (source_dir.parent / ".git").exists() else Path.cwd()),
+        "ocr_pipeline_version": _git_sha(
+            source_dir.parent if (source_dir.parent / ".git").exists() else Path.cwd()
+        ),
     }
     validate_done_dict(done, job_dir=incoming)
 
