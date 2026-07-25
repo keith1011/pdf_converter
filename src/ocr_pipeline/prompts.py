@@ -37,6 +37,12 @@ TEXT_ROUTER_PROMPT = f"""請提取圖片中的全部文字，保持繁體中文�
 
 {LATEX_MATH_RULES}
 
+【試卷／選擇題結構】
+- 這可能是整題、半題或單一選項／公式碎片；只輸出「圖中可見」的文字，禁止補全未出現的題幹或選項。
+- 若看到選項，盡量維持「A. 內容」同一行（或緊接下一行），不要把「A.」與內容拆成無關碎片說明。
+- 標點（。．）跟著前文；不要單獨輸出一個句號當一整段。
+- 看不清的字用 ?，不要猜測發明。
+
 額外：
 - 行內公式用 $...$ 包裹。
 - 獨立成行的公式／方程式用 $$...$$。
@@ -95,11 +101,12 @@ CONTENT_FIRST_POLISH_PROMPT = f"""你是一個 LaTeX 排版專家。請將以下
 6. 文件可用 \\documentclass[12pt]{{ctexart}}，並 \\usepackage{{amsmath,amssymb}}；或至少輸出 document body。
 7. 不要輸出 <|end_of_box|> 或其他特殊 token。
 8. <<<TEX>>> 內只輸出完整 LaTeX 源碼（完整 document 或至少 document body），禁止 markdown 圍欄（```）與前後說明文字。
+9. 若草稿把選擇題拆成「A.」／「B.」單獨一行、下一行才是內容或句號，請合併成「A. 內容。」；不要刪題、不要重排題號。
 
 請嚴格用下列標記輸出兩段（不要其他說明）：
 
 <<<TXT>>>
-（純文本；公式用 $...$；直式一行一步；無開場白）
+（純文本；公式用 $...$；直式一行一步；無開場白；選項盡量同行）
 <<<TEX>>>
 （完整可編譯 LaTeX document，或至少 \\begin{{document}}...\\end{{document}} 內正文）
 
@@ -109,10 +116,12 @@ CONTENT_FIRST_POLISH_PROMPT = f"""你是一個 LaTeX 排版專家。請將以下
 # Ship 1: content-first is the active polish header.
 POLISH_PROMPT_HEADER = CONTENT_FIRST_POLISH_PROMPT
 
-FIGURE_CAPTION_PROMPT = """你正在看一張試卷／講義中的圖（圖表、幾何圖、示意圖）。
+FIGURE_CAPTION_PROMPT = """你正在看一張試卷／講義中的圖（圖表、幾何圖、函數圖像、示意圖）。
 
 任務：用一句繁體中文短說明這張圖畫什麼（供題庫檢索）。
 規則：
 - 只輸出一句話，不要編號、不要 markdown、不要「這張圖是」。
-- 不要發明圖中沒有的細節；看不清就寫「圖示（細節不清）」。
+- 優先寫可見類型：如「二次函數圖像」「直角三角形與正方形」「棒形圖／折線圖」「坐標平面上的直線」。
+- 不要發明圖中沒有的數值或標籤；軸／頂點看不清可省略。
+- 僅當圖糊到無法判斷類型時，才寫「圖示（細節不清）」。
 """

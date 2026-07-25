@@ -1,5 +1,100 @@
 # Progress Log
 
+# Progress Log
+
+## 2026-07-25 15:40 — Full nup-full OCR + off-center gutter fix
+- Full 8p exit 0 (~843s): `output/2014-DSE-MATH-CP-2.nup-full.*`; GPU peak ~9GB.
+- Split in that run: p2/p3/p5/p8 OK; **p4/p6/p7 missed** (true 2-up booklet).
+- Root cause: gutter off W/2 (≈0.44–0.57). Fix: search best split in 38–62%; crop uses `split_x`.
+- Tests `-k nup` → **27 passed** (incl. real p4/p6/p7). Re-OCR of missed pages not re-run yet.
+
+## 2026-07-25 15:20 — N-up GPU smoke 2014 (limit-3) OK
+- Classifier fix: detect **dark spine** + landscape prefers `2_lr` (was missing all dual pages). Threshold 0.70.
+- Stage1 (mineru venv first attempt): p1 `1` fallback; p2/p3 `2_lr` panels=2. Then bitsandbytes missing in `.venv-mineru312` → crashed Stage2.
+- Resume: `uv run` + `--reuse-layout` → exit 0; total ~318s; GPU peak ~8.3GB / 61% util / ~65°C; released to ~2GB.
+- Artifacts: `output/2014-DSE-MATH-CP-2.nup-smoke.*`; `nup/page_00{1,2,3}/nup.json`.
+- WARN: polish parse fail; draft wrapped (pre-existing polish fragility).
+
+## 2026-07-25 01:00 — N-up classifier+crop implemented (TDD Tasks 1–7)
+- GitHub: repo had **0 open issues**. Created [#2](https://github.com/keith1011/pdf_converter/issues/2) (GPU smoke follow-up). Copilot assign **403 / no MCP assign tool** — assign manually in UI if desired.
+- Code: `nup_*` modules + pipeline/factory/`nup:` config; stitch markers; polish per-version chunks; PageIR `version_id`.
+- Tests: `uv run pytest tests -k nup -q` → **20 passed**; related suites green; ruff clean on touched files.
+- Not committed (await user). Optional next: GPU smoke 2014 (issue #2).
+
+## 2026-07-25 00:53 — N-up design approved + writing-plans
+- Brainstorm locked: 2+4 up; uncertain→whole-page; **classifier + fixed midline/2×2** (not XY-Cut++); semantic best-effort; auto-detect.
+- Spec: `docs/superpowers/specs/2026-07-25-nup-classifier-crop-design.md`
+- Plan: `docs/superpowers/plans/2026-07-25-nup-classifier-crop.md` (Tasks 1–7, TDD)
+- Awaiting execution mode (subagent-driven vs inline).
+
+## 2026-07-25 00:37 — Verify 2014 after coalesce re-OCR
+- Outputs 00:36. Tests 22 passed (mcq/segmenter/reading_order/prompts).
+- Reading order: p1 row_major; p2–8 column_major, 1 flip each — OK.
+- MCQ: txt shows `A. -1。` / `C. 0 或 -4。` style lines (was bare `A.` / `-1` / `。`).
+- Residual: polish sometimes jams next stem onto same line after `D. …`.
+
+## 2026-07-25 00:30 — MCQ coalesce + prompt harden (VLM/segmenter)
+- Investigated fragmentation; web+context7 OCR prompt guidance applied.
+- Code: prompts + stitch coalesce + segmenter coalesce; 27 related tests passed.
+- User should re-OCR 2014 to see txt/pageir improvement.
+
+## 2026-07-25 00:17 — Verified 2014 re-OCR after column-major
+- Outputs mtime 00:14: txt/tex/pageir refreshed; 8p, 19 figures, kinds prose277/math126/figure19.
+- Layout on load: p1 row_major; p2–8 column_major with **1** L→R flip each (was 7–23 zigzag).
+- txt shows coherent `6.` / `25.` / `30.` then `乙部` / `38.` — no 16↔19 line interleave.
+- Residual: within-question option/math fragmentation (VLM/segmenter), not column order.
+- Review copy refreshed: `output/_review/2014-DSE-MATH-CP-2/`.
+
+## 2026-07-24 23:45 — Gated two-column reading order
+- Implemented `assign_reading_order` / `detect_two_column`; tests 7 passed (+mineru/layout suites).
+- 2014 layout on load: p1 row_major; p2–8 column_major (1 flip each).
+- Next: re-OCR 2014 with reuse-layout when user asks.
+
+## 2026-07-24 23:22 — Z: batch OK + analysis
+- Publish+ingest all 5 → Z: timestamped jobs; **2766/2766** segments.
+- Canvas: `canvases/smoke5-ocr-results.canvas.tsx`. Caveat: many figure captions =「細節不清」.
+
+## 2026-07-24 22:51 — Resume 2016 only + Z: batch all 5
+- 2012–2015 have txt+pageir; prior job killed after 2015. Resume script skips done docs.
+
+## 2026-07-24 22:28 — Resume after reboot: 2015 + 2016
+- Skip 2012/2013/2014 (have txt+pageir). Run remaining then Z: batch `--reindex`.
+
+## 2026-07-24 22:15 — Job died mid-2015 (not clean finish)
+- Terminal `90117` last write **12:12**; cut mid `2015p2` Stage2 page2 (`route p002_b016`, no `done`).
+- No OCR process / no lock now. Outputs: 2012/2013/2014 complete; **no** 2015/2016 txt+pageir; batch never ran for remaining.
+- Likely session/sleep/process kill (no clean `OCR_DONE`/`exit_code`); not the earlier generate-hang pattern (blocks were ~40s).
+
+## 2026-07-24 11:39 — Resume OCR 2014–2016 after VLM fix
+- GPU free (~1.8GB); no lock. Starting `full_smoke_5docs_resume.py` (skip 2012/2013).
+- Then auto batch publish+ingest `--reindex` to `Z:/`.
+
+## 2026-07-24 11:36 — VLM eos/pad + Stage2 timing (context7)
+- Fixed `vlm_client`: stop token ids + greedy GenerationConfig scrub.
+- Fixed `routers`: per-block `done … Xs` logs.
+- Tests: 10 passed. Ready to resume 2014/2015/2016 when user asks.
+
+## 2026-07-24 11:34 — Killed hung 2014 OCR
+- User: kill — first two docs ~10min total; 2014 stuck ~20min on first title generate.
+- Killed resume + `run_ocr_pipeline` (2014) PIDs; removed `output/.ocr_pipeline.lock`.
+- Done so far: `2012p2`, `2013p2`. `2014` incomplete. Await resume/fix decision.
+
+## 2026-07-24 11:20 — Code check (context7) while OCR runs
+- Reviewed `vlm_client.run_vlm_generate` vs transformers v4.57 + Qwen2-VL docs.
+- Verdict: chat-template path OK; missing explicit `eos_token_id`/`pad_token_id`; Stage2 silent during long greedy decode; `temperature` warn from model GenerationConfig.
+- Logged in `findings.md`. No code change mid-smoke.
+- Smoke: `2013p2` done; `2014-DSE-MATH-CP-2` Stage2 active (GPU ~70% util / ~8GB).
+
+## 2026-07-24 09:50 — Start full 5-doc OCR + Z: batch
+- PDFs: `2012p2`, `2013p2`, `2014-DSE-MATH-CP-2`, `2015p2`, `2016p2` in `data/sources/`.
+- User asked full OCR then batch publish/ingest; `Z:\jobs` OK; GPU ~10GB free.
+- Runner: `.superpowers/sdd/full_smoke_5docs.py` (log: `full_smoke_5docs.log`).
+
+## 2026-07-24 09:46 — Prep for 5-doc FIGURE smoke
+- User will drop ~5 × ~20pp PDFs with figures into `data/sources/`.
+- Expanded MinerU label map: `chart` / `diagram` (+ caption variants → OTHER) → FIGURE.
+- Smoke order when files arrive: limit-1 figure check → full OCR → batch ingest.
+
 ## 2026-07-24 09:24 — GPU smoke (figure + batch)
 - OCR limit-1: `123` ~94s, `789` ~42s (MinerU+Qwen); no MinerU FIGURE labels on these pages.
 - Forced figure path: `export_figures` → PNG + caption (`output/_smoke_fig/figures/p001_bFIG.png`, 9KB).
@@ -280,6 +375,12 @@
 1. User review of OCR adapter design spec; then writing-plans
 2. Optional: full 14-page OCR re-run with new TABLE_ROUTER + `--check-compile`
 3. Homelab follow-ups (still uncommitted under `homelab/`)
+
+## 2026-07-25 — nup-v2 hang → EOS harden → resume
+- Died mid Stage2 (~2h, ~45s/block). Timing ≈ full 1024-token burn; stub prompt reproduced `!` wall; real prompts now early-stop.
+- Fix: prefer `generation_config.eos_token_id` list; WARN on near-max `n_new`. Tests 9 passed.
+- Smoke `--limit 1 --reuse-layout --skip-polish`: after load, blocks ~0.7–4s (not 45s). No WARN.
+- Full resume exit 0: `TIMING: route=400s polish=389s total=802s` → `output/2014-DSE-MATH-CP-2.nup-v2.*`
 
 ## 2026-07-23 — Brainstorm: multi-engine OCR branches (spec written)
 - Locked: D scored (edit time + formulas); speed logged not weighted

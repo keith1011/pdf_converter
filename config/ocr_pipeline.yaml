@@ -54,6 +54,13 @@ paths:
   output_dir: "output"
   crop_dir: "output/crops"
 
+# Pre-MinerU N-up gate (classifier + fixed midline / 2×2 crop). See
+# docs/superpowers/specs/2026-07-25-nup-classifier-crop-design.md
+nup:
+  enabled: true
+  confidence_threshold: 0.70
+  margin_norm: 0.01
+
 pipeline:
   # Deprecated: content-first always polishes per page (kept for config compat)
   polish_per_page: false

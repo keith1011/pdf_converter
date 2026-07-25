@@ -40,6 +40,8 @@ def test_mineru_layout_maps_figure_labels(tmp_path, monkeypatch):
                 {"label": "image", "bbox": [0, 0, 10, 10]},
                 {"label": "figure", "bbox": [0, 20, 10, 30]},
                 {"label": "picture", "bbox": [0, 40, 10, 50]},
+                {"label": "chart", "bbox": [0, 60, 10, 70]},
+                {"label": "diagram", "bbox": [0, 80, 10, 90]},
             ]
 
     from PIL import Image
@@ -52,6 +54,8 @@ def test_mineru_layout_maps_figure_labels(tmp_path, monkeypatch):
     Image.new("RGB", (8, 8), color=(255, 255, 255)).save(image)
     blocks = engine.analyze(image, page=1)
     assert [b.block_type for b in blocks] == [
+        BlockType.FIGURE,
+        BlockType.FIGURE,
         BlockType.FIGURE,
         BlockType.FIGURE,
         BlockType.FIGURE,

@@ -18,6 +18,7 @@ from .layout_artifact import (
     save_layout_artifact,
 )
 from .models import BBox, BlockType, ContentSegment, PageResult, PipelineResult
+from .nup_router import analyze_page_with_nup
 from .pipeline_lock import DEFAULT_LOCK_NAME, PipelineLock
 from .routers import DynamicRouter
 
@@ -34,6 +35,9 @@ class PipelineManager:
         *,
         layout_engine=None,
         extract_figures: bool = True,
+        nup_enabled: bool = True,
+        nup_confidence_threshold: float = 0.75,
+        nup_margin_norm: float = 0.01,
     ):
         self.layout = layout
         self.layout_engine = layout_engine
@@ -43,6 +47,9 @@ class PipelineManager:
         self.output_dir = output_dir
         self.pages_dir = pages_dir
         self.extract_figures = extract_figures
+        self.nup_enabled = nup_enabled
+        self.nup_confidence_threshold = nup_confidence_threshold
+        self.nup_margin_norm = nup_margin_norm
 
     @staticmethod
     def _safe_stem(path: Path) -> str:
@@ -143,7 +150,15 @@ class PipelineManager:
                     m = re.search(r"(\d+)", image_path.stem)
                     page = int(m.group(1)) if m else len(pages) + 1
                     print(f"\n=== Stage1 layout page {page}: {image_path} ===")
-                    blocks = self._analyze(image_path, page)
+                    blocks = analyze_page_with_nup(
+                        self._analyze,
+                        image_path,
+                        page=page,
+                        page_dir=page_dir,
+                        enabled=self.nup_enabled,
+                        threshold=self.nup_confidence_threshold,
+                        margin_norm=self.nup_margin_norm,
+                    )
                     if getattr(self.layout, "_backend", None) == "fullpage":
                         warns.add("layout fullpage fallback (not golden)")
                     print(f"  blocks={len(blocks)}")

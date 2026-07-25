@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ocr_pipeline.models import BBox, BlockType, LayoutBlock
+from ocr_pipeline.reading_order import assign_reading_order
 
 from .base import EngineError
 
@@ -24,7 +25,11 @@ _LABEL_MAP = {
     "image": BlockType.FIGURE,
     "figure": BlockType.FIGURE,
     "picture": BlockType.FIGURE,
+    "chart": BlockType.FIGURE,
+    "diagram": BlockType.FIGURE,
     "figure_caption": BlockType.OTHER,
+    "image_caption": BlockType.OTHER,
+    "chart_caption": BlockType.OTHER,
 }
 
 
@@ -103,10 +108,7 @@ class MineruLayoutEngine:
                     meta={"label": str(label)},
                 )
             )
-        blocks.sort(key=lambda block: (block.bbox.y1, block.bbox.x1, block.order))
-        for order, block in enumerate(blocks):
-            block.order = order
-        return blocks
+        return assign_reading_order(blocks)
 
     def release(self) -> None:
         self._model = None

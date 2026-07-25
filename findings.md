@@ -1,5 +1,99 @@
 # Findings & Decisions
 
+## 2026-07-25 — nup-v2 Stage2 ~45s/block (EOS / token burn)
+- Symptom: `nup-v2` Stage2 avg ~38–46s/block (flat); died mid `p007_v0_b007` after ~2h. Compare `nup-full` ~1–5s after warmup.
+- Timing math: ~45s ≈ burning `max_new_tokens_route=1024` at normal tok/s — not “more pages”.
+- Stub-prompt probe (“Transcribe…”) → `n_new=1024`, wall of `!` (~63s). **Real** `TEXT_ROUTER_PROMPT` on same crops → early stop (~2–4s, n≈18–67).
+- Hung crop `p007_v0_b007` retested OK with real prompt; root cause of *why* that run missed EOS not fully reproduced (env / stop-id set).
+- Hardening: prefer `generation_config.eos_token_id` **list** (`[im_end, endoftext]`) over tokenizer single id; WARN when `n_new >= 0.9 * max`.
+
+## 2026-07-25 — Full nup-full analysis (before fix decision)
+- Full OCR exit 0 (~843s): `output/2014-DSE-MATH-CP-2.nup-full.*`
+- Split OK: p2/p3/p5/p8 `2_lr`, layout `v0→v1` no flips
+- **Missed true 2-up:** p4 (booklet 6–7), p6 (10–11), p7 (12–13) — classifier `1`/`uncertain`; v_score 0.04/0.48/0.10
+- Hypothesis: diagram-heavy / uneven ink → mid gutter signal weak vs content bands
+- GPU peak ~9GB during run; idle ~2GB after
+
+- User scope lock: **B = 2-up + 4-up (2×2)**; 8-up deferred.
+- Flow intent: coarse split → one PNG per version → MinerU per version → existing Qwen path.
+- Uncertain N-up: **A = fall back to whole page as single-version MinerU** (safe; may reintroduce interleave).
+- Coarse split method: ~~XY-Cut++ primary~~ → **revised: classifier + fixed geometric cut** (midline / 2×2 grid).
+- Version labels: **B = try semantic** (EN/ZH, Ver A/B); fall back to `vN` if unsure.
+- Default mode: **B = auto-detect** (split when 2/4-up looks confident; else single-page path).
+- Architecture pick: **Approach C** — N-up **classifier** → fixed crop (L/R or 2×2) → MinerU per panel → existing Qwen path. Tradeoff: simplest; skew/uneven gutters brittle.
+
+### Locked decisions (brainstorm)
+| Topic | Choice |
+|---|---|
+| N-up scope | 2-up + 4-up (2×2); 8 later |
+| Uncertain split | Fall back whole-page MinerU |
+| Coarse splitter | **Classifier + fixed midline / 2×2 grid** (not XY-Cut++) |
+| Version IDs | Semantic if possible, else `vN` |
+| Enablement | Auto-detect smart mode |
+| Pipeline shape | Pre-crop gate (Approach 1 shape) with C-style cut |
+
+### Approved artifacts
+- Spec: `docs/superpowers/specs/2026-07-25-nup-classifier-crop-design.md`
+- Plan: `docs/superpowers/plans/2026-07-25-nup-classifier-crop.md`
+- Classifier MVP in plan: **projection-valley heuristics** (CPU, no extra VRAM), not a trained N-up CNN.
+- Implementation (2026-07-25): modules `nup_{types,crop,classify,router,merge,label}`; pipeline Stage1 via `analyze_page_with_nup`; config `nup.enabled=true`; PageIR `version_id`; polish splits on `<<<nup:…>>>`. Tests `-k nup` → 20 passed.
+- Classifier fix post-smoke: dark-spine + landscape→prefer `2_lr` (booklet crease). `confidence_threshold: 0.70`. GPU smoke limit-3 exit 0.
+Not a drop-in “better than MinerU for DSE dual-version” winner; problem splits into **detection** vs **reading order**.
+- **Detection:** DocLayout-YOLO (real-time, DocStructBench); PP-DocLayout family; MinerU already on PP-DocLayoutV2. Newer **PP-DocLayoutV3 / RT-DocLayout** claims detection+seg+reading-order unified.
+- **Reading order:** classic XY-Cut weak on complex multi-col; **XY-Cut++** (2025) strong on order recovery (papers claim large gains vs XY-Cut / LayoutReader) — complementary to detectors, not a replacement.
+- **End-to-end VLM OCR:** olmOCR 2 / DeepSeek-OCR — better multi-col *linearized text*, different product (less PageIR/crop control).
+- For our pains (dual-version columns + MCQ atomization): order algorithm / region merge > swapping detector alone.
+**Root cause:** MinerU atomizes MCQs (2014 p2: 39 blocks, 23 formula/equation). Stage2 OCR per tiny crop → stitch `\n\n` → segmenter → PageIR **45% segments ≤3 chars** (`A.` / `-1` / `。`).
+
+**Research:** Qwen2.5-VL OCR best practices (DeepWiki) — specific prompts, preserve structure, don’t fabricate; Alibaba VL-OCR — explicit “do not omit/fabricate”.
+
+**Fixes shipped:**
+1. `TEXT_ROUTER_PROMPT` / polish / figure caption — exam MCQ structure + no-fabricate + less eager「細節不清」.
+2. `coalesce_stitched_fragments` in `DraftAssembler.stitch`.
+3. `coalesce_mcq_segments` at end of `segment_stitched_page`.
+4. Tests: `tests/test_mcq_coalesce.py` (+ segmenter/content_first) **27 passed**.
+
+**Needs re-OCR** for 2014 (or any doc) to refresh outputs; offline segmenter alone can’t fix already-written txt without re-run.
+
+## 2026-07-24 — Gated column-major reading order
+- Added `reading_order.py`: detect two-column (gap + separated centers; ignore wide banners) → column-major; else row-major `(y1,x1)`.
+- Wired into MinerU, DocLayout-YOLO, and `load_layout_artifact` (so `--reuse-layout` also benefits).
+- 2014 check: page1 `row_major`; pages2–8 `column_major` with **1** L→R flip (was 7–23).
+- 2012/2013/2015/2016: expect mostly `row_major` (verified in session).
+- Re-OCR 2014 with `--reuse-images --reuse-layout` to refresh txt/tex/pageir.
+
+## 2026-07-24 — 2014 dual-version L/R reading order bug
+User: 左右分版；現在讀成左→右交錯（如 16 題第一行 → 19 題第一行 → 16 題第二行）。
+
+**Root cause:** `mineru_layout.py` sorts blocks with `(bbox.y1, bbox.x1)` then reassigns `order`. Same-y left+right → LTR zigzag across columns.
+
+**Evidence (layout.json):** page2 has **23** L/R order-flips; e.g. order0 L, order1–2 R, order3 L… Page1 is single-column-ish (all R, 0 flips) — cover/instructions on one side.
+
+**Fix direction (not implemented yet):**
+1. Detect 2-column (x-gap / bimodal cx); sort **column-major**: all L by y, then all R by y (or configurable).
+2. Or emit two PageIR streams / two docs (version A / B) when dual-version detected.
+3. Same sort exists in `doclayout_yolo.py` — fix both if changed.
+
+## 2026-07-24 — Applied context7 VLM hardenings (post-kill)
+- `resolve_stop_token_ids` + `build_generation_kwargs(..., eos/pad)` wired into `run_vlm_generate`.
+- `force_greedy_generation_config` on Qwen/GLM load (clears temperature/top_p/top_k → stops ignored-flag warn).
+- Stage2: `route` + `done <id> Xs` with `flush=True` so long generates are visible.
+- Hard generate timeout **not** added (CUDA generate not cancel-friendly on Windows); rely on EOS stop + timing.
+- Focused tests: **10 passed** (`test_vlm_greedy_decode` + `test_skip_figures_router`).
+
+## 2026-07-24 — Code check during 5-doc smoke (context7 + vlm_client)
+
+Against transformers **v4.57** docs + Qwen2-VL README (via context7):
+
+1. **Our generate path matches the official Qwen template shape** (`apply_chat_template` → `generate` → trim `input_ids` → `batch_decode`). Good.
+2. **Hang risk / slow Stage2:** `build_generation_kwargs` only sets `max_new_tokens` + `do_sample=False`. Docs recommend also setting `eos_token_id` (and usually `pad_token_id`) on `GenerationConfig` / `generate`. If EOS is not honored from model config, greedy decode can burn the full **1024** route tokens per crop → looks “stuck” (no log between `route` lines). Matches the ~50min stall on `2013p2` first text block.
+3. **Log noise:** transformers warns `temperature` generation flag ignored — likely from model `generation_config` while we force greedy. Harmless but confirms config mixing.
+4. **Processor:** “Qwen2VLImageProcessor loaded as fast by default” warning — behavior change vs older checkpoints; watch for OCR quality drift; can force `use_fast=False` if needed.
+5. **Budgets:** Official VL chat demos often use `max_new_tokens=128`; we use route **1024** / polish **2048**. Correct for long exam pages, but Stage2 should log per-block timing and consider lower caps for tiny crops.
+6. **`torch.cuda.empty_cache()` after every generate** — safe on 12GB, adds sync cost across hundreds of blocks.
+
+**Suggested follow-up (after smoke, not mid-run):** pass `eos_token_id` / `pad_token_id` from `processor.tokenizer` into `generate`; add Stage2 per-block elapsed log; optional generate timeout.
+
 ## 2026-07-24 — Task 7: figure+batch contract (docs + regression)
 - `skip_figures=true` → crop FIGURE blocks but **no draft OCR** stitch into Stage2 text (caption path still used when `extract_figures`).
 - `extract_figures=true` (default) → figure **caption path**: crop → Qwen caption → `figures/<id>.png` + PageIR `SegmentKind.FIGURE` with `crop_relpath`.

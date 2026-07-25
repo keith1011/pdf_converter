@@ -7,6 +7,7 @@ import re
 from .models import BBox, ContentSegment, IntegrityStatus, PageIR, SegmentKind
 
 _META_LINE = re.compile(r"將圖片.*轉換")
+_NUP_MARKER = re.compile(r"^<<<nup:(v\d+|zh|en|[A-Za-z0-9_\-]+)>>>$")
 # Allow \\$ (currency) inside math; do not treat it as a delimiter.
 _DOLLAR_MATH = re.compile(r"(?<!\\)\$((?:[^$\\]|\\.)+?)(?<!\\)\$")
 _HTML_BREAK = re.compile(r"<br\s*/?>", re.IGNORECASE)
@@ -64,6 +65,10 @@ _JUNK_FRAC_DASH = re.compile(r"\\frac\{-\}\{-\}")
 _TEXT_CJK = re.compile(r"\\text\{([^}]*[\u4e00-\u9fff][^}]*)\}")
 _TEXT_PUNCT_ONLY = re.compile(r"\\text\{[\s，。、：；！？「」『』（）,.\-–—]*\}")
 _LEADING_CJK_RUN = re.compile(r"^([\u4e00-\u9fff\s，。、：；！？「」『』（）,.．]+)")
+_OPTION_ONLY = re.compile(r"^[A-Da-d][\.．、)]\s*$")
+_PUNCT_ONLY = re.compile(r"^[。．.、，,；;：:！!？?\s]+$")
+_OPTION_START = re.compile(r"^[A-Da-d][\.．、)]\s*")
+_QNUM_ONLY = re.compile(r"^\d{1,2}[\.．]\s*$")
 
 
 def _looks_like_math(text: str) -> bool:
@@ -287,6 +292,7 @@ def _append_partitions(
     *,
     source_id: str,
     page_bbox: BBox,
+    version_id: str | None = None,
 ) -> None:
     for kind, body in _partition_math_and_prose(text):
         if not body or _is_tabular_chrome_body(body):
@@ -298,8 +304,76 @@ def _append_partitions(
                 source_block_id=source_id,
                 bbox=page_bbox,
                 integrity=IntegrityStatus.OK,
+                version_id=version_id,
             )
         )
+
+
+def coalesce_mcq_segments(segments: list[ContentSegment]) -> list[ContentSegment]:
+    """Merge atomized MCQ option fragments into fewer PageIR segments."""
+    if not segments:
+        return segments
+    out: list[ContentSegment] = []
+    for seg in segments:
+        if not out:
+            out.append(seg)
+            continue
+        prev = out[-1]
+        if prev.kind in {SegmentKind.FIGURE, SegmentKind.MARK_NOTE} or seg.kind is SegmentKind.FIGURE:
+            out.append(seg)
+            continue
+        if _PUNCT_ONLY.match(seg.text):
+            out[-1] = ContentSegment(
+                kind=prev.kind if prev.kind is not SegmentKind.MATH else SegmentKind.PROSE,
+                text=prev.text.rstrip() + seg.text.strip(),
+                source_block_id=prev.source_block_id,
+                bbox=prev.bbox,
+                integrity=prev.integrity,
+                crop_relpath=prev.crop_relpath,
+                version_id=prev.version_id,
+            )
+            continue
+        if _OPTION_ONLY.match(prev.text) and seg.kind in {
+            SegmentKind.PROSE,
+            SegmentKind.MATH,
+        }:
+            body = seg.text.strip()
+            if seg.kind is SegmentKind.MATH and not body.startswith("$"):
+                body = f"${body}$"
+            out[-1] = ContentSegment(
+                kind=SegmentKind.PROSE,
+                text=f"{prev.text.rstrip()} {body}".strip(),
+                source_block_id=prev.source_block_id,
+                bbox=prev.bbox,
+                integrity=prev.integrity,
+                crop_relpath=prev.crop_relpath,
+                version_id=prev.version_id,
+            )
+            continue
+        if (
+            _OPTION_START.match(prev.text)
+            and not _OPTION_ONLY.match(seg.text)
+            and not _QNUM_ONLY.match(seg.text)
+            and seg.kind in {SegmentKind.PROSE, SegmentKind.MATH}
+            and len(seg.text) <= 48
+            and len(prev.text) <= 120
+        ):
+            body = seg.text.strip()
+            if seg.kind is SegmentKind.MATH and not body.startswith("$"):
+                body = f"${body}$"
+            joiner = "" if _PUNCT_ONLY.match(body) else " "
+            out[-1] = ContentSegment(
+                kind=SegmentKind.PROSE,
+                text=f"{prev.text.rstrip()}{joiner}{body}".strip(),
+                source_block_id=prev.source_block_id,
+                bbox=prev.bbox,
+                integrity=prev.integrity,
+                crop_relpath=prev.crop_relpath,
+                version_id=prev.version_id,
+            )
+            continue
+        out.append(seg)
+    return out
 
 
 def segment_stitched_page(
@@ -315,10 +389,15 @@ def segment_stitched_page(
     """
     source_id = f"p{page_index}_stitched"
     segments: list[ContentSegment] = []
+    current_version: str | None = None
 
     for raw_line in _linearized_lines(stitched_text):
         line = raw_line.strip()
         if not line:
+            continue
+        m_nup = _NUP_MARKER.fullmatch(line)
+        if m_nup:
+            current_version = m_nup.group(1)
             continue
         if _META_LINE.search(line):
             continue
@@ -330,6 +409,7 @@ def segment_stitched_page(
                     source_block_id=source_id,
                     bbox=page_bbox,
                     integrity=IntegrityStatus.OK,
+                    version_id=current_version,
                 )
             )
             continue
@@ -340,25 +420,43 @@ def segment_stitched_page(
             before = line[pos : m.start()].strip()
             if before:
                 _append_partitions(
-                    parts, before, source_id=source_id, page_bbox=page_bbox
+                    parts,
+                    before,
+                    source_id=source_id,
+                    page_bbox=page_bbox,
+                    version_id=current_version,
                 )
             math_body = _strip_orphan_dollars(m.group(1))
             if math_body and not _is_tabular_chrome_body(math_body):
                 _append_partitions(
-                    parts, math_body, source_id=source_id, page_bbox=page_bbox
+                    parts,
+                    math_body,
+                    source_id=source_id,
+                    page_bbox=page_bbox,
+                    version_id=current_version,
                 )
             pos = m.end()
         after = _strip_orphan_dollars(line[pos:])
         if after and not _is_tabular_chrome_body(after):
             if pos == 0:
                 parts = []
-            _append_partitions(parts, after, source_id=source_id, page_bbox=page_bbox)
+            _append_partitions(
+                parts,
+                after,
+                source_id=source_id,
+                page_bbox=page_bbox,
+                version_id=current_version,
+            )
         if not parts and line:
             cleaned = _strip_orphan_dollars(line)
             if cleaned and not _is_tabular_chrome_body(cleaned):
                 _append_partitions(
-                    parts, cleaned, source_id=source_id, page_bbox=page_bbox
+                    parts,
+                    cleaned,
+                    source_id=source_id,
+                    page_bbox=page_bbox,
+                    version_id=current_version,
                 )
         segments.extend(parts)
 
-    return PageIR(page_index=page_index, segments=segments)
+    return PageIR(page_index=page_index, segments=coalesce_mcq_segments(segments))

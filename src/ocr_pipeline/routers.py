@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 
 from .models import BlockType, LayoutBlock
@@ -157,17 +158,24 @@ class DynamicRouter:
             return block
 
         block.crop_path = self.crop(block)
-        print(f"    route {block.block_id} [{block.block_type.value}] order={block.order}")
-        if block.block_type in self.MATH_TYPES:
-            return self.math_router.process(block)
-        if block.block_type in self.TEXT_TYPES:
-            return self.text_router.process(block)
-        if block.block_type in self.FIGURE_TYPES:
-            # Provisional: VLM/text OCR until dedicated figure-caption path ships.
-            return self.text_router.process(block)
-        block.raw_text = ""
-        block.meta["skipped"] = True
-        return block
+        print(f"    route {block.block_id} [{block.block_type.value}] order={block.order}", flush=True)
+        t0 = time.perf_counter()
+        try:
+            if block.block_type in self.MATH_TYPES:
+                out = self.math_router.process(block)
+            elif block.block_type in self.TEXT_TYPES:
+                out = self.text_router.process(block)
+            elif block.block_type in self.FIGURE_TYPES:
+                # Provisional: VLM/text OCR until dedicated figure-caption path ships.
+                out = self.text_router.process(block)
+            else:
+                block.raw_text = ""
+                block.meta["skipped"] = True
+                out = block
+        finally:
+            dt = time.perf_counter() - t0
+            print(f"    done {block.block_id} {dt:.1f}s", flush=True)
+        return out
 
     def route_page(self, blocks: list[LayoutBlock]) -> list[LayoutBlock]:
         ordered = sorted(blocks, key=lambda b: b.order)

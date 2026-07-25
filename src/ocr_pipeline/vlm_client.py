@@ -46,7 +46,63 @@ def strip_fences(text: str) -> str:
 _strip_fences = strip_fences
 
 
-def build_generation_kwargs(*, max_new_tokens: int, temperature: float) -> dict:
+def resolve_stop_token_ids(processor: Any, model: Any) -> dict[str, Any]:
+    """eos/pad for generate(); without them greedy decode may burn full max_new_tokens.
+
+    Prefer ``model.generation_config.eos_token_id`` when set — Qwen2.5-VL uses a
+    *list* (``<|im_end|>`` + ``<|endoftext|>``). Passing only the tokenizer's
+    single eos can miss the alternate stop id and burn the full token budget.
+    """
+    tok = getattr(processor, "tokenizer", None) or processor
+    eos = None
+    pad = getattr(tok, "pad_token_id", None)
+
+    gc = getattr(model, "generation_config", None)
+    if gc is not None:
+        gc_eos = getattr(gc, "eos_token_id", None)
+        if gc_eos is not None:
+            eos = gc_eos
+        if pad is None:
+            pad = getattr(gc, "pad_token_id", None)
+
+    if eos is None:
+        eos = getattr(tok, "eos_token_id", None)
+    cfg = getattr(model, "config", None)
+    if eos is None and cfg is not None:
+        eos = getattr(cfg, "eos_token_id", None)
+    if pad is None and cfg is not None:
+        pad = getattr(cfg, "pad_token_id", None)
+    if pad is None:
+        pad = eos[0] if isinstance(eos, (list, tuple)) and eos else eos
+    out: dict[str, Any] = {}
+    if eos is not None:
+        out["eos_token_id"] = eos
+    if pad is not None:
+        out["pad_token_id"] = pad
+    return out
+
+
+def force_greedy_generation_config(model: Any) -> None:
+    """Drop sampling flags on model.generation_config (avoids temperature-ignored warn)."""
+    gc = getattr(model, "generation_config", None)
+    if gc is None:
+        return
+    gc.do_sample = False
+    for key in ("temperature", "top_p", "top_k"):
+        if hasattr(gc, key):
+            try:
+                setattr(gc, key, None)
+            except Exception:
+                pass
+
+
+def build_generation_kwargs(
+    *,
+    max_new_tokens: int,
+    temperature: float,
+    eos_token_id: Any = None,
+    pad_token_id: Any = None,
+) -> dict:
     """
     Always use greedy decoding for OCR/VLM.
 
@@ -54,10 +110,15 @@ def build_generation_kwargs(*, max_new_tokens: int, temperature: float) -> dict:
     device-side assert inside torch.multinomial on Qwen2.5-VL 4bit.
     """
     _ = temperature  # retained for config/API compatibility
-    return {
+    kwargs: dict[str, Any] = {
         "max_new_tokens": max_new_tokens,
         "do_sample": False,
     }
+    if eos_token_id is not None:
+        kwargs["eos_token_id"] = eos_token_id
+    if pad_token_id is not None:
+        kwargs["pad_token_id"] = pad_token_id
+    return kwargs
 
 
 def run_vlm_generate(
@@ -116,14 +177,24 @@ def run_vlm_generate(
     inputs = inputs.to(model.device)
     inputs.pop("token_type_ids", None)
 
+    stop_ids = resolve_stop_token_ids(processor, model)
     gen_kwargs = build_generation_kwargs(
         max_new_tokens=int(max_new_tokens),
         temperature=temperature,
+        eos_token_id=stop_ids.get("eos_token_id"),
+        pad_token_id=stop_ids.get("pad_token_id"),
     )
 
     with torch.inference_mode():
         generated = model.generate(**inputs, **gen_kwargs)
     trimmed = generated[:, inputs["input_ids"].shape[1] :]
+    n_new = int(trimmed.shape[1]) if trimmed.ndim == 2 else 0
+    # Flat ~40–50s/block usually means we burned max_new_tokens (no early EOS).
+    if max_new_tokens > 0 and n_new >= int(max_new_tokens * 0.9):
+        print(
+            f"[VLM] WARN near-max tokens: n_new={n_new} max={max_new_tokens}",
+            flush=True,
+        )
     out = processor.batch_decode(
         trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )
@@ -190,6 +261,7 @@ class Qwen25VlClient:
                 self.model_name, **model_kwargs
             )
         self.model.eval()
+        force_greedy_generation_config(self.model)
 
     def generate(
         self,

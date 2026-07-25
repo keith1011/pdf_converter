@@ -65,6 +65,7 @@ def apply_integrity_to_page(page: PageIR) -> tuple[PageIR, list[str]]:
                     bbox=seg.bbox,
                     integrity=status,
                     crop_relpath=seg.crop_relpath,
+                    version_id=seg.version_id,
                 )
             )
         else:
@@ -86,6 +87,7 @@ def write_pageir_json(path: Path, pages: list[PageIR]) -> None:
                         "bbox": [s.bbox.x1, s.bbox.y1, s.bbox.x2, s.bbox.y2],
                         "integrity": s.integrity.value,
                         "crop_relpath": s.crop_relpath,
+                        "version_id": s.version_id,
                     }
                     for s in p.segments
                 ],

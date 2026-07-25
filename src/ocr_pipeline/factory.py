@@ -84,6 +84,10 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     pipe_cfg = cfg.get("pipeline") or {}
     skip_figures = bool(pipe_cfg.get("skip_figures", True))
     extract_figures = bool(pipe_cfg.get("extract_figures", True))
+    nup_cfg = cfg.get("nup") or {}
+    nup_enabled = bool(nup_cfg.get("enabled", True))
+    nup_confidence_threshold = float(nup_cfg.get("confidence_threshold", 0.75))
+    nup_margin_norm = float(nup_cfg.get("margin_norm", 0.01))
     router = DynamicRouter(math, text, crop_dir=crop_dir, skip_figures=skip_figures)
 
     return PipelineManager(
@@ -101,4 +105,7 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         output_dir=Path(paths.get("output_dir", "output")),
         pages_dir=Path(paths.get("pages_dir", "data/pdf_pages")),
         extract_figures=extract_figures,
+        nup_enabled=nup_enabled,
+        nup_confidence_threshold=nup_confidence_threshold,
+        nup_margin_norm=nup_margin_norm,
     )

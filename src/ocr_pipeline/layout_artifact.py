@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from .models import BBox, BlockType, LayoutBlock, PageResult
+from .reading_order import assign_reading_order
 
 LAYOUT_ARTIFACT_VERSION = 1
 LAYOUT_ARTIFACT_NAME = "layout.json"
@@ -87,6 +88,7 @@ def load_layout_artifact(path: Path) -> list[PageResult]:
         blocks = [_block_from_dict(b) for b in (page.get("blocks") or [])]
         for b in blocks:
             b.image_path = image_path
+        blocks = assign_reading_order(blocks)
         pages.append(
             PageResult(
                 page=int(page["page"]),

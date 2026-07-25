@@ -9,7 +9,7 @@ from pathlib import Path
 
 import torch
 
-from .vlm_client import run_vlm_generate
+from .vlm_client import force_greedy_generation_config, run_vlm_generate
 
 
 class Glm46VFlashClient:
@@ -64,6 +64,7 @@ class Glm46VFlashClient:
                 self.model_name, **model_kwargs
             )
         self.model.eval()
+        force_greedy_generation_config(self.model)
 
     def generate(
         self,

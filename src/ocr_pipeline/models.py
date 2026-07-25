@@ -102,6 +102,7 @@ class ContentSegment:
     bbox: BBox
     integrity: IntegrityStatus = IntegrityStatus.OK
     crop_relpath: str | None = None
+    version_id: str | None = None
 
 
 @dataclass

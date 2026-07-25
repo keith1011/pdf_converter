@@ -4,7 +4,11 @@
 PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--check-compile` PDF；教師 ≤10 分鐘手改後可 reuse。
 
 ## Current Phase
-**Trunk locked: MinerU + Qwen + Qwen** — `config/ocr_pipeline.yaml` `engines.layout=mineru`; figure+batch ingest plan **complete** (Tasks 1–7 uncommitted).
+**N-up dual-layout** — classifier green; `nup-v2` full OCR **exit 0** (~802s) after EOS harden.
+- Spec: `docs/superpowers/specs/2026-07-25-nup-classifier-crop-design.md`
+- Plan: `docs/superpowers/plans/2026-07-25-nup-classifier-crop.md` (Tasks 1–7 code done)
+- Trunk still: MinerU + Qwen (`engines.layout=mineru`); `nup.enabled: true` in config
+- Artifacts: `output/2014-DSE-MATH-CP-2.nup-v2.*`
 
 ## Routing (locked)
 - Always: planning-with-files (`task_plan.md` / `findings.md` / `progress.md`)
@@ -19,7 +23,7 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | Default VLM | **Qwen2.5-VL-7B-Instruct 4bit** |
 | **Trunk stack** | **MinerU layout + Qwen text + Qwen formula** (locked 2026-07-24) |
 | Formula knives | got / unimernet opt-in only |
-| Decode | **greedy only** (`do_sample=False`) — sampling → CUDA multinomial assert |
+| Decode | **greedy only** (`do_sample=False`) — sampling → CUDA multinomial assert; pass `eos_token_id`/`pad_token_id`; scrub model `generation_config` sampling flags |
 | Token budgets | Stage3 polish **2048**; Stage2 route **1024** (`max_new_tokens_route`) |
 | Surya v2 | Optional fallback；Docker cold ~221s — not trunk；if used, `release()` must stop `surya-vllm-*` |
 | MinerU runtime | `uv sync` (default-groups includes `mineru`); transformers pinned `<5` |
@@ -194,6 +198,8 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | **Trunk = MinerU + Qwen + Qwen** (2026-07-24) | Layout bakeoff (equation boxes) + scorecard (Qwen quality); config `engines.layout=mineru` |
 | transformers `<5` + `mineru` uv group | MinerU 3.4 needs transformers 4.x; default-groups include mineru |
 | `skip_figures` wired | DynamicRouter honors `pipeline.skip_figures`; false → text/VLM OCR on FIGURE |
+| **N-up = classifier + fixed midline/2×2** (2026-07-25) | Simplest pre-MinerU gate; XY-Cut++ deferred; uncertain → whole-page fallback |
+| N-up scope 2+4 only; auto-detect; semantic labels best-effort | Brainstorm locked; see design spec |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -204,8 +210,10 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | Stage3 OOM after Surya v2 success | 1 | Call manager.stop (insufficient alone) |
 | Stage3 OOM (same) | 2 | `docker stop surya-vllm-*` + GPU headroom wait in `release()` |
 | Dual `run_ocr_pipeline` PIDs during monitor | note | Avoid concurrent runs on 12GB |
+| N-up classifier missed 2014 (white-valley only) | 1 | Add dark-spine + landscape→2_lr; threshold 0.70 |
+| `.venv-mineru312` missing bitsandbytes | 1 | Use `uv run` (default-groups has mineru+bnb) for full OCR |
 
 ## Next Action
-1. **Figure+batch plan complete** (Tasks 1–7 uncommitted) — optional: commit when user asks (`docs: figure ingest + batch CLI status` or code+docs package)
-2. Manual GPU smoke checklist (limit-1 OCR → figures → `batch_export --publish --ingest` → Qdrant `kind=figure` / `pageir_v2`) — only when user asks
+1. Optional GPU smoke: 2014 dual pages with `nup.enabled=true`; confirm `nup/*.json` + no L↔R zigzag
+2. Commit N-up package when user asks
 3. Homelab Wave 2 / ColPali / Ship 2 overlay — **closed** until explicitly requested
