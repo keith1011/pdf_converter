@@ -40,7 +40,11 @@ def publish(
     job_id = job_id or f"{stamp}-{doc_id}"
 
     required = [source_dir / f"{doc_id}.txt"]
-    optional = [source_dir / f"{doc_id}.pageir.json", source_dir / f"{doc_id}.tex"]
+    optional = [
+        source_dir / f"{doc_id}.pageir.json",
+        source_dir / f"{doc_id}.tex",
+        source_dir / f"{doc_id}.quality.json",
+    ]
     for p in required:
         if not p.is_file():
             raise FileNotFoundError(p)

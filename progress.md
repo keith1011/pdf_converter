@@ -376,6 +376,13 @@
 2. Optional: full 14-page OCR re-run with new TABLE_ROUTER + `--check-compile`
 3. Homelab follow-ups (still uncommitted under `homelab/`)
 
+## 2026-07-26 — Quality gate TDD + GitHub hybrid
+- Listed open issues (#1 PR draft, #2 N-up smoke); created #4 core + #3 wiring
+- Copilot assign failed (`Bot does not have access`); implemented both locally with TDD
+- `uv run pytest` quality+ingest gate suites green; ruff --fix on touched tests/batch_export
+- ohm: type hints A; complexity flag on `build_quality_report` (defer extract — covered by tests)
+- Spec approved + code uncommitted pending user commit ask
+
 ## 2026-07-25 — nup-v2 hang → EOS harden → resume
 - Died mid Stage2 (~2h, ~45s/block). Timing ≈ full 1024-token burn; stub prompt reproduced `!` wall; real prompts now early-stop.
 - Fix: prefer `generation_config.eos_token_id` list; WARN on near-max `n_new`. Tests 9 passed.

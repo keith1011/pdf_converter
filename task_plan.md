@@ -4,11 +4,10 @@
 PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--check-compile` PDF；教師 ≤10 分鐘手改後可 reuse。
 
 ## Current Phase
-**N-up dual-layout** — classifier green; `nup-v2` full OCR **exit 0** (~802s) after EOS harden.
-- Spec: `docs/superpowers/specs/2026-07-25-nup-classifier-crop-design.md`
-- Plan: `docs/superpowers/plans/2026-07-25-nup-classifier-crop.md` (Tasks 1–7 code done)
-- Trunk still: MinerU + Qwen (`engines.layout=mineru`); `nup.enabled: true` in config
-- Artifacts: `output/2014-DSE-MATH-CP-2.nup-v2.*`
+**OCR quality gate** — **implemented** (TDD); Copilot assign failed (no bot access).
+- Spec: `docs/superpowers/specs/2026-07-26-ocr-quality-gate-design.md` (Approved)
+- Issues: [#4](https://github.com/keith1011/pdf_converter/issues/4) core (closed), [#3](https://github.com/keith1011/pdf_converter/issues/3) wiring (implemented; leave open or close manually)
+- `nup-v2.quality.json`: verdict=**fail** (le3=0.277, ge20=0.225); canary only via `--ingest-partial`
 
 ## Routing (locked)
 - Always: planning-with-files (`task_plan.md` / `findings.md` / `progress.md`)

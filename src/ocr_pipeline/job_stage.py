@@ -19,7 +19,7 @@ def stage_job_dir(*, doc_id: str, output_dir: Path, staging_dir: Path) -> Path:
         raise FileNotFoundError(text)
     shutil.copy2(text, staging_dir / text.name)
 
-    for name in (f"{doc_id}.tex", f"{doc_id}.pageir.json"):
+    for name in (f"{doc_id}.tex", f"{doc_id}.pageir.json", f"{doc_id}.quality.json"):
         source = output_dir / name
         if source.is_file():
             shutil.copy2(source, staging_dir / name)

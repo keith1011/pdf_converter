@@ -1,5 +1,19 @@
 # Findings & Decisions
 
+## 2026-07-26 — OCR quality gate implemented (TDD)
+- Issues #4 (core) + #3 (wiring); Copilot assign **failed** (`Bot does not have access`) → local TDD
+- Module `ocr_pipeline.quality`; ingest/batch flags; finalize emits `.quality.json`
+- Focused tests 29+ green; ruff clean on touched files; ohm `analyze_codebase` on quality: 0 issues
+- Offline `nup-v2`: fail (le3=0.277, ge20=0.225, admitted_est=0.533)
+
+## 2026-07-26 — Quality gate implemented (TDD; Copilot assign failed)
+- Issues: [#4](https://github.com/keith1011/pdf_converter/issues/4) core, [#3](https://github.com/keith1011/pdf_converter/issues/3) wiring
+- Copilot assign: GraphQL `Bot does not have access` — implemented locally
+- `ocr_pipeline.quality` + ingest/batch flags; finalize emits `.quality.json`
+- Tests: quality admit/report + ingest gate — green; ruff clean on touched files
+- ohm-mcp: analyze_codebase on quality.py (no high issues)
+- Offline nup-v2: verdict **fail** (le3=0.277, ge20=0.225, admitted_est=0.533)
+
 ## 2026-07-25 — nup-v2 Stage2 ~45s/block (EOS / token burn)
 - Symptom: `nup-v2` Stage2 avg ~38–46s/block (flat); died mid `p007_v0_b007` after ~2h. Compare `nup-full` ~1–5s after warmup.
 - Timing math: ~45s ≈ burning `max_new_tokens_route=1024` at normal tok/s — not “more pages”.
