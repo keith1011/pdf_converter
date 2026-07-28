@@ -1,5 +1,9 @@
 # Progress Log
 
+## 2026-07-28 — handoff2.md for Japan VPS / ChatGPT Codex egress
+- Wrote `handoff2.md` for next Codex agent: Tailscale + VPS `gost` HTTP on `100.64.70.2:8080`; ChatGPT Windows needs HTTP_PROXY (not SOCKS / not Exit Node).
+- Status: proxy curl already worked from PC-A; next = confirm gost up + launch ChatGPT with proxy env/launcher.
+
 ## 2026-07-24 — Ingest contract implemented (figure + batch)
 - Slice A: `crop_relpath` in pageir; stage/publish `figures/`; ingest `pageir_v2` + payload `crop_path`.
 - Slice B: `figure_caption.py`; DynamicRouter FIGURE path; finalize merge; trunk `skip_figures: false`.
