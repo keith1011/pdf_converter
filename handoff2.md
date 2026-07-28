@@ -167,6 +167,8 @@ CLI 吃環境變數 `HTTP_PROXY` / `HTTPS_PROXY`（**HTTP**，不要 SOCKS）。
 ```powershell
 # 1) gost 還活著
 curl.exe -4 -s --proxy http://100.64.70.2:8080 https://ifconfig.me
+# 若 -4 失敗，改不加 -4（出口可能只有 IPv6）
+curl.exe -s --proxy http://100.64.70.2:8080 https://ifconfig.me
 
 # 2) 設代理（勿設 ALL_PROXY=socks5）
 $env:HTTP_PROXY  = "http://100.64.70.2:8080"
@@ -181,21 +183,34 @@ codex --version
 codex
 ```
 
-**用 repo 腳本（建議）：** 在 repo 根目錄（或改成你的實際路徑）：
+**用 repo 腳本（備援）：** `.\scripts\codex-jp-proxy.ps1`（probe 會先試 IPv4 再 dual-stack）。
 
-```powershell
-cd "C:\Users\a1217\OneDrive\桌面\aiworkplace\pdf scaner"   # 依你本機 clone 路徑調整
-.\scripts\codex-jp-proxy.ps1
-.\scripts\codex-jp-proxy.ps1 --version
-```
+### 5.5 用應用程式代替腳本（建議）
 
-關掉該終端或清掉 env 即恢復直連：
+VPS 上 **gost 仍要開**；下面只取代 PC-A 的 PowerShell 啟動方式。
 
-```powershell
-Remove-Item Env:HTTP_PROXY, Env:HTTPS_PROXY, Env:NO_PROXY -ErrorAction SilentlyContinue
-```
+| 方案 | 適合 | 怎麼設（你的代理） | 備註 |
+|------|------|-------------------|------|
+| **[chatgpt-proxy-launcher](https://github.com/gaopengbin/chatgpt-proxy-launcher)** | ChatGPT Windows／裡頭 Codex | Host `100.64.70.2`，Port `8080`，**HTTP** | 專為 Desktop；行程級 `HTTP_PROXY`；勿填 SOCKS |
+| **[Proxifier](https://www.proxifier.com/)**（付費） | Desktop **＋** `codex.exe` CLI | Profile → Proxy：HTTP `100.64.70.2:8080`；Rules：只對 `ChatGPT.exe` / `codex.exe` Action=該 proxy；其餘 Direct；保留 Localhost Direct | 不靠 env，較不易「腳本突然掛」；試用可先驗證 |
+| Clash Verge / Mihomo 等 | 進階規則分流 | 上游指到 `100.64.70.2:8080` 或本機再轉；用 **process** 規則只匹配 ChatGPT／codex | 設定較重；SOCKS／TUN 對 Codex 曾不穩，優先 HTTP |
 
-**不要**把 `HTTP_PROXY` 寫進「系統環境變數」當永久全域（會拖到別的程式）。要常駐可另做捷徑只對 Codex 設 env，或只用上述腳本。
+**推薦路徑（少折騰）：**
+
+1. Desktop → 裝 **chatgpt-proxy-launcher**，代理 `100.64.70.2:8080`（HTTP）。  
+2. 若也要 CLI 穩定、不想養 ps1 → 用 **Proxifier** 規則綁 `codex.exe`（同一 HTTP proxy）。  
+3. `scripts/codex-jp-proxy.ps1` 留作備援，不必當日常入口。
+
+Proxifier 規則骨架：
+
+1. Proxy Servers → Add → Type **HTTPS/HTTP**，Address `100.64.70.2`，Port `8080`  
+2. Proxification Rules（由上到下）：  
+   - Localhost → **Direct**（預設保留）  
+   - `ChatGPT.exe`; `codex.exe` → **你的 Japan proxy**  
+   - Default → **Direct**  
+3. 不要開「整機都走 proxy」。
+
+關掉該 App／規則 = 恢復直連；**不要**開 Tailscale Exit Node。
 
 ---
 
