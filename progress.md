@@ -1,5 +1,9 @@
 # Progress Log
 
+## 2026-07-28 — App instead of proxy script (handoff2 §5.5)
+- Web research: chatgpt-proxy-launcher (Desktop), Proxifier (Desktop+CLI), Clash process rules.
+- Recommend launcher + Proxifier; keep gost on VPS; ps1 as fallback.
+
 ## 2026-07-28 — Proxy probe: IPv4 then IPv6 fallback
 - Root cause candidate: gost live but `curl -4` fails; earlier success was IPv6 `2a09:bac5:...`.
 - `codex-jp-proxy.ps1` now tries `-4` then dual-stack.

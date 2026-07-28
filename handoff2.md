@@ -13,8 +13,8 @@ Do **not** invent state. Prefer this file + live `curl` / `ssh` 檢查。勿貼 
 
 | Want | Do |
 |------|-----|
-| 只有 ChatGPT Windows／裡頭的 Codex 走日本 | HTTP 代理經 Tailscale → VPS `gost` |
-| **Codex CLI** 也走日本 | 同一 `HTTP_PROXY`／`HTTPS_PROXY`（見 §5.4、`scripts/codex-jp-proxy.ps1`） |
+| 只有 ChatGPT Windows／裡頭的 Codex 走日本 | HTTP 代理經 Tailscale → VPS `gost`；日常可用 **launcher App**（§5.5） |
+| **Codex CLI** 也走日本 | 同代理；日常可用 **Proxifier** 綁 `codex.exe`，腳本備援 |
 | 可選：瀏覽器部分流量走日本 | 同一 HTTP 代理或本機 SOCKS |
 | Homelab / Samba / 一般上網 | **直連**（不要開 Tailscale Exit Node） |
 
