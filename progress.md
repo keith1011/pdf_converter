@@ -1,5 +1,9 @@
 # Progress Log
 
+## 2026-07-28 — Fix codex-jp-proxy.ps1 PowerShell arg binding
+- `--version` was bound to `$ProxyUrl` (probe became `Probing proxy --version`).
+- Fix: `[CmdletBinding(PositionalBinding = $false)]` so remaining args go to `codex`.
+
 ## 2026-07-28 — Codex CLI Japan proxy + handoff2 update
 - Added `scripts/codex-jp-proxy.ps1` (probe gost → set HTTP(S)_PROXY → run `codex`).
 - Extended `handoff2.md` §5.4 for CLI; same VPS `http://100.64.70.2:8080`, no Exit Node / no SOCKS.

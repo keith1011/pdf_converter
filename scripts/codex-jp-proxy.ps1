@@ -2,10 +2,14 @@
 # Usage:
 #   .\scripts\codex-jp-proxy.ps1
 #   .\scripts\codex-jp-proxy.ps1 --version
-#   .\scripts\codex-jp-proxy.ps1   # then interactive; extra args forwarded to codex
+#   .\scripts\codex-jp-proxy.ps1 -SkipProbe
+#   .\scripts\codex-jp-proxy.ps1 -ProxyUrl http://100.64.70.2:8080
 #
 # Requires: Tailscale up; VPS gost listening on http://100.64.70.2:8080
+#
+# Note: PositionalBinding=$false so `--version` goes to codex, NOT -ProxyUrl.
 
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [string]$ProxyUrl = "http://100.64.70.2:8080",
     [switch]$SkipProbe,
