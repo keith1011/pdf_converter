@@ -19,17 +19,60 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if (-not $SkipProbe) {
-    Write-Host "Probing proxy $ProxyUrl ..."
+function Test-JpProxy {
+    param([string]$Url)
+
+    Write-Host "Probing proxy $Url ..."
+
+    $tailscale = Get-Command tailscale -ErrorAction SilentlyContinue
+    if ($tailscale) {
+        $ts = & tailscale status --json 2>$null | ConvertFrom-Json -ErrorAction SilentlyContinue
+        if ($ts -and $ts.BackendState -and $ts.BackendState -ne "Running") {
+            Write-Warning "Tailscale BackendState=$($ts.BackendState) (expected Running)"
+        }
+    }
+
+    $outFile = [System.IO.Path]::GetTempFileName()
+    $errFile = [System.IO.Path]::GetTempFileName()
     try {
-        $egress = & curl.exe -4 -s --connect-timeout 5 --proxy $ProxyUrl "https://ifconfig.me"
-        if (-not $egress) { throw "empty response" }
+        $proc = Start-Process -FilePath "curl.exe" -ArgumentList @(
+            "-4", "-sS", "--connect-timeout", "8", "--max-time", "15",
+            "--proxy", $Url, "https://ifconfig.me"
+        ) -NoNewWindow -Wait -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+
+        $egress = (Get-Content -Raw -ErrorAction SilentlyContinue $outFile).Trim()
+        $err = (Get-Content -Raw -ErrorAction SilentlyContinue $errFile).Trim()
+
+        if ($proc.ExitCode -ne 0 -or -not $egress) {
+            Write-Host "curl exit=$($proc.ExitCode)"
+            if ($err) { Write-Host "curl stderr: $err" }
+            throw "proxy probe failed"
+        }
+
         Write-Host "Proxy OK; egress IPv4: $egress"
+        return $egress
+    } finally {
+        Remove-Item -Force -ErrorAction SilentlyContinue $outFile, $errFile
+    }
+}
+
+if (-not $SkipProbe) {
+    try {
+        [void](Test-JpProxy -Url $ProxyUrl)
     } catch {
         Write-Error @"
 Proxy probe failed for $ProxyUrl.
-On VPS: gost -L http://`$(tailscale ip -4):8080
-Or: curl.exe -4 -s --proxy $ProxyUrl https://ifconfig.me
+
+Likely causes (most common first):
+  1) VPS gost stopped (SSH window closed) — on VPS run:
+       gost -L http://`$(tailscale ip -4):8080
+  2) Tailscale down on PC-A — check tray / ``tailscale status``
+  3) Wrong IP/port — confirm ``tailscale status`` still shows 100.64.70.2
+
+Manual checks on PC-A:
+  tailscale status
+  curl.exe -4 -sS --connect-timeout 8 --proxy $ProxyUrl https://ifconfig.me
+  ping 100.64.70.2
 "@
         exit 1
     }

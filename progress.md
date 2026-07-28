@@ -1,5 +1,8 @@
 # Progress Log
 
+## 2026-07-28 — Harden codex-jp-proxy.ps1 probe errors
+- Richer curl exit/stderr + Tailscale hint when proxy suddenly fails (usually VPS gost died with SSH).
+
 ## 2026-07-28 — Fix codex-jp-proxy.ps1 PowerShell arg binding
 - `--version` was bound to `$ProxyUrl` (probe became `Probing proxy --version`).
 - Fix: `[CmdletBinding(PositionalBinding = $false)]` so remaining args go to `codex`.
