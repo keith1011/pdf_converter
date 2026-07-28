@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-28  
 **Audience:** next **Codex / ChatGPT Windows** helper agent on **PC-A**（`C:\Users\a1217`）  
-**Scope:** 只讓 **ChatGPT Windows 內建 Codex**（＋可選瀏覽器）走日本 VPS；其餘流量直連。  
+**Scope:** 只讓 **ChatGPT Windows 內建 Codex**、**Codex CLI**（＋可選瀏覽器）走日本 VPS；其餘流量直連。  
 **Not in scope:** P-ocr OCR pipeline、Homelab Wave、Qdrant、改 repo 產品碼（除非使用者明確要求把本文件再整理進 docs）。
 
 Do **not** invent state. Prefer this file + live `curl` / `ssh` 檢查。勿貼 SSH key、WARP license、密碼進 chat／commit。
@@ -14,11 +14,12 @@ Do **not** invent state. Prefer this file + live `curl` / `ssh` 檢查。勿貼 
 | Want | Do |
 |------|-----|
 | 只有 ChatGPT Windows／裡頭的 Codex 走日本 | HTTP 代理經 Tailscale → VPS `gost` |
+| **Codex CLI** 也走日本 | 同一 `HTTP_PROXY`／`HTTPS_PROXY`（見 §5.4、`scripts/codex-jp-proxy.ps1`） |
 | 可選：瀏覽器部分流量走日本 | 同一 HTTP 代理或本機 SOCKS |
 | Homelab / Samba / 一般上網 | **直連**（不要開 Tailscale Exit Node） |
 
 **不要用：** `tailscale set --exit-node=...`（整機出站）。  
-**不要用：** 只設 `ALL_PROXY=socks5://...` 開 ChatGPT（Windows Codex 對 SOCKS 不穩；要 **HTTP** 代理）。
+**不要用：** 只設 `ALL_PROXY=socks5://...` 開 ChatGPT／CLI（Windows Codex 對 SOCKS 不穩；要 **HTTP** 代理）。
 
 ---
 
@@ -26,7 +27,8 @@ Do **not** invent state. Prefer this file + live `curl` / `ssh` 檢查。勿貼 
 
 ```
 PC-A (Windows)
-  ChatGPT.exe / Codex  ──HTTP_PROXY──►  http://100.64.70.2:8080
+  ChatGPT.exe / Desktop Codex  ─┐
+  Codex CLI (`codex`)          ─┼─HTTP_PROXY──►  http://100.64.70.2:8080
                                               │
                                          Tailscale
                                               │
@@ -40,7 +42,7 @@ PC-A (Windows)
 
 | 節點 | 角色 | 已知值 |
 |------|------|--------|
-| PC-A | ChatGPT Windows + Codex；設行程級 `HTTP_PROXY` | User `a1217` |
+| PC-A | ChatGPT Windows + Codex CLI；設行程／shell 級 `HTTP_PROXY` | User `a1217` |
 | Japan VPS | Tailscale 節點 + `gost` HTTP 代理 | Tailscale IPv4 **`100.64.70.2`**（hostname 曾見 `VM126A68275163C82`） |
 | PC-B Homelab | 無關本 lane；維持直連 | LAN `192.168.1.107` / TS `100.101.145.120` |
 
@@ -65,6 +67,7 @@ PC-A (Windows)
 
 - [ ] 確認 VPS 上 `gost` **仍在跑**（見 §4）。
 - [ ] **完全退出** ChatGPT 後，用行程級 HTTP 代理啟動（見 §5）。
+- [ ] **Codex CLI**：用 §5.4 或 `.\scripts\codex-jp-proxy.ps1` 啟動並實測。
 - [ ] 在 ChatGPT／Codex 內做一次真實請求，確認能連；必要時對照直連 IP。
 - [ ] （可選）瀏覽器 SwitchyOmega → HTTP `100.64.70.2:8080`。
 - [ ] （可選）把 VPS `gost` 做成 systemd，避免 SSH 視窗關掉就停。
@@ -155,6 +158,45 @@ https://github.com/gaopengbin/chatgpt-proxy-launcher
 | `cd /tmp` 在 PowerShell 失敗 | `/tmp` 是 **Linux VPS** 路徑；本機不要跑 VPS 安裝指令 |
 | Exit Node 一開 Homelab／整機異常 | `tailscale set --exit-node=` 清掉 |
 
+### 5.4 Codex CLI（同一代理）
+
+CLI 吃環境變數 `HTTP_PROXY` / `HTTPS_PROXY`（**HTTP**，不要 SOCKS）。`config.toml` 沒有獨立 proxy 鍵時以 env 為準。
+
+**一次性（目前這個 PowerShell 視窗）：**
+
+```powershell
+# 1) gost 還活著
+curl.exe -4 -s --proxy http://100.64.70.2:8080 https://ifconfig.me
+
+# 2) 設代理（勿設 ALL_PROXY=socks5）
+$env:HTTP_PROXY  = "http://100.64.70.2:8080"
+$env:HTTPS_PROXY = "http://100.64.70.2:8080"
+$env:NO_PROXY    = "localhost,127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8,100.64.0.0/10"
+Remove-Item Env:ALL_PROXY -ErrorAction SilentlyContinue
+
+# 3) 確認 CLI 在 PATH
+codex --version
+
+# 4) 啟動
+codex
+```
+
+**用 repo 腳本（建議）：** 在 repo 根目錄（或改成你的實際路徑）：
+
+```powershell
+cd "C:\Users\a1217\OneDrive\桌面\aiworkplace\pdf scaner"   # 依你本機 clone 路徑調整
+.\scripts\codex-jp-proxy.ps1
+.\scripts\codex-jp-proxy.ps1 --version
+```
+
+關掉該終端或清掉 env 即恢復直連：
+
+```powershell
+Remove-Item Env:HTTP_PROXY, Env:HTTPS_PROXY, Env:NO_PROXY -ErrorAction SilentlyContinue
+```
+
+**不要**把 `HTTP_PROXY` 寫進「系統環境變數」當永久全域（會拖到別的程式）。要常駐可另做捷徑只對 Codex 設 env，或只用上述腳本。
+
 ---
 
 ## 6. （可選）VPS 常駐 gost — systemd 草稿
@@ -207,8 +249,9 @@ https://iecho.cc/posts/apply-cloudflare-warp-for-v2ray-shadowsocks-outbound-conn
 
 1. PC-A：`curl --proxy http://100.64.70.2:8080` 穩定回出口 IP。  
 2. 不開 Exit Node。  
-3. ChatGPT Windows／Codex 經 `HTTP_PROXY` 或 launcher 啟動後可正常對話／跑 Codex。  
-4. 瀏覽器／系統其餘流量未被迫走日本（抽樣直連 `ifconfig.me` 與代理結果不同即可）。  
+3. ChatGPT Windows／Desktop Codex 經 `HTTP_PROXY` 或 launcher 啟動後可正常對話。  
+4. **Codex CLI** 在設好 `HTTP_PROXY`／`HTTPS_PROXY`（或 `scripts/codex-jp-proxy.ps1`）後可正常跑。  
+5. 瀏覽器／系統其餘流量未被迫走日本（抽樣直連 `ifconfig.me` 與代理結果不同即可）。  
 
 ---
 
@@ -216,7 +259,7 @@ https://iecho.cc/posts/apply-cloudflare-warp-for-v2ray-shadowsocks-outbound-conn
 
 1. 跑 §4 的 `curl.exe -4 ... --proxy http://100.64.70.2:8080`。  
 2. 不通 → SSH 進 VPS 重開 `gost`（或做 §6 systemd）。  
-3. 通 → §5 完全退出 ChatGPT → 帶 `HTTP_PROXY` 啟動 → 使用者試 Codex。  
-4. 回報：代理 IPv4、ChatGPT 是否吃到代理、還缺不缺 launcher／systemd。
+3. 通 → §5 Desktop；§5.4／`scripts/codex-jp-proxy.ps1` 跑 CLI。  
+4. 回報：代理 IPv4、Desktop／CLI 是否都吃到代理、還缺不缺 launcher／systemd。
 
 **P-ocr / `handoff.md`：** 那是產品主 handoff；本檔是 **網路 egress 支線**。兩邊不要互相覆蓋狀態。

@@ -1,5 +1,9 @@
 # Progress Log
 
+## 2026-07-28 — Codex CLI Japan proxy + handoff2 update
+- Added `scripts/codex-jp-proxy.ps1` (probe gost → set HTTP(S)_PROXY → run `codex`).
+- Extended `handoff2.md` §5.4 for CLI; same VPS `http://100.64.70.2:8080`, no Exit Node / no SOCKS.
+
 ## 2026-07-28 — handoff2.md for Japan VPS / ChatGPT Codex egress
 - Wrote `handoff2.md` for next Codex agent: Tailscale + VPS `gost` HTTP on `100.64.70.2:8080`; ChatGPT Windows needs HTTP_PROXY (not SOCKS / not Exit Node).
 - Status: proxy curl already worked from PC-A; next = confirm gost up + launch ChatGPT with proxy env/launcher.
