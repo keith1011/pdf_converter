@@ -1,5 +1,9 @@
 # Progress Log
 
+## 2026-07-28 — Proxy probe: IPv4 then IPv6 fallback
+- Root cause candidate: gost live but `curl -4` fails; earlier success was IPv6 `2a09:bac5:...`.
+- `codex-jp-proxy.ps1` now tries `-4` then dual-stack.
+
 ## 2026-07-28 — Harden codex-jp-proxy.ps1 probe errors
 - Richer curl exit/stderr + Tailscale hint when proxy suddenly fails (usually VPS gost died with SSH).
 

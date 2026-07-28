@@ -8,6 +8,7 @@
 # Requires: Tailscale up; VPS gost listening on http://100.64.70.2:8080
 #
 # Note: PositionalBinding=$false so `--version` goes to codex, NOT -ProxyUrl.
+# Note: Probe tries IPv4 then falls back to dual-stack/IPv6 (VPS egress may be IPv6-only).
 
 [CmdletBinding(PositionalBinding = $false)]
 param(
@@ -18,6 +19,45 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Invoke-ProxyCurl {
+    param(
+        [string]$Url,
+        [string[]]$IpArgs
+    )
+
+    $outFile = [System.IO.Path]::GetTempFileName()
+    $errFile = [System.IO.Path]::GetTempFileName()
+    try {
+        $argList = @()
+        if ($IpArgs) { $argList += $IpArgs }
+        $argList += @(
+            "-sS", "--connect-timeout", "8", "--max-time", "15",
+            "--proxy", $Url, "https://ifconfig.me"
+        )
+
+        $proc = Start-Process -FilePath "curl.exe" `
+            -ArgumentList $argList `
+            -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $outFile `
+            -RedirectStandardError $errFile
+
+        $egress = (Get-Content -Raw -ErrorAction SilentlyContinue $outFile)
+        if ($null -eq $egress) { $egress = "" }
+        $egress = $egress.Trim()
+        $err = (Get-Content -Raw -ErrorAction SilentlyContinue $errFile)
+        if ($null -eq $err) { $err = "" }
+        $err = $err.Trim()
+
+        return [pscustomobject]@{
+            ExitCode = $proc.ExitCode
+            Egress   = $egress
+            Stderr   = $err
+        }
+    } finally {
+        Remove-Item -Force -ErrorAction SilentlyContinue $outFile, $errFile
+    }
+}
 
 function Test-JpProxy {
     param([string]$Url)
@@ -32,28 +72,24 @@ function Test-JpProxy {
         }
     }
 
-    $outFile = [System.IO.Path]::GetTempFileName()
-    $errFile = [System.IO.Path]::GetTempFileName()
-    try {
-        $proc = Start-Process -FilePath "curl.exe" -ArgumentList @(
-            "-4", "-sS", "--connect-timeout", "8", "--max-time", "15",
-            "--proxy", $Url, "https://ifconfig.me"
-        ) -NoNewWindow -Wait -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    # Prefer IPv4, but many VPS/WARP paths only return IPv6 (seen: 2a09:bac5:...).
+    $attempts = @(
+        @{ Label = "IPv4 (-4)"; Args = @("-4") },
+        @{ Label = "dual-stack/IPv6"; Args = @() }
+    )
 
-        $egress = (Get-Content -Raw -ErrorAction SilentlyContinue $outFile).Trim()
-        $err = (Get-Content -Raw -ErrorAction SilentlyContinue $errFile).Trim()
-
-        if ($proc.ExitCode -ne 0 -or -not $egress) {
-            Write-Host "curl exit=$($proc.ExitCode)"
-            if ($err) { Write-Host "curl stderr: $err" }
-            throw "proxy probe failed"
+    $details = @()
+    foreach ($a in $attempts) {
+        $r = Invoke-ProxyCurl -Url $Url -IpArgs $a.Args
+        $details += "$($a.Label): exit=$($r.ExitCode) body='$($r.Egress)' stderr='$($r.Stderr)'"
+        if ($r.ExitCode -eq 0 -and $r.Egress) {
+            Write-Host "Proxy OK via $($a.Label); egress: $($r.Egress)"
+            return $r.Egress
         }
-
-        Write-Host "Proxy OK; egress IPv4: $egress"
-        return $egress
-    } finally {
-        Remove-Item -Force -ErrorAction SilentlyContinue $outFile, $errFile
     }
+
+    Write-Host ($details -join "`n")
+    throw "proxy probe failed"
 }
 
 if (-not $SkipProbe) {
@@ -67,11 +103,14 @@ Likely causes (most common first):
   1) VPS gost stopped (SSH window closed) — on VPS run:
        gost -L http://`$(tailscale ip -4):8080
   2) Tailscale down on PC-A — check tray / ``tailscale status``
-  3) Wrong IP/port — confirm ``tailscale status`` still shows 100.64.70.2
+  3) IPv4-only probe failed but IPv6 works — re-test without -4:
+       curl.exe -sS --proxy $ProxyUrl https://ifconfig.me
+  4) Wrong IP/port — confirm ``tailscale status`` still shows 100.64.70.2
 
 Manual checks on PC-A:
   tailscale status
   curl.exe -4 -sS --connect-timeout 8 --proxy $ProxyUrl https://ifconfig.me
+  curl.exe -sS --connect-timeout 8 --proxy $ProxyUrl https://ifconfig.me
   ping 100.64.70.2
 "@
         exit 1
