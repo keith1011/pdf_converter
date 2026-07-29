@@ -1,5 +1,9 @@
 # Progress Log
 
+## 2026-07-29 — handoff01.md (homeserver current state only)
+- Documented PC-B still-in-use setup: SSH harden, ufw, Tailscale, Samba, Qdrant compose, Wave2 session Ollama/agent, backups.
+- Explicitly omitted deleted/unused and non-B items (VPS/WG/gost/ProxyBridge).
+
 ## 2026-07-28 — App instead of proxy script (handoff2 §5.5)
 - Web research: chatgpt-proxy-launcher (Desktop), Proxifier (Desktop+CLI), Clash process rules.
 - Recommend launcher + Proxifier; keep gost on VPS; ps1 as fallback.
