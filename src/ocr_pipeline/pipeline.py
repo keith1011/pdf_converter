@@ -6,7 +6,7 @@ import re
 from contextlib import nullcontext
 from pathlib import Path
 
-from .assemble import DraftAssembler, FinalPolisher
+from .assemble import DraftAssembler, FinalPolisher, split_question_chunks
 from .cli_report import WarnCollector, print_stage3_start
 from .content_first import finalize_content_first
 from .engines.timing import StageTimer
@@ -20,7 +20,62 @@ from .layout_artifact import (
 from .models import BBox, BlockType, ContentSegment, PageResult, PipelineResult
 from .nup_router import analyze_page_with_nup
 from .pipeline_lock import DEFAULT_LOCK_NAME, PipelineLock
+from .pylatex_assist import encode_unicode_outside_math
 from .routers import DynamicRouter
+
+_QID_LINE = re.compile(r"^(\d{1,2})[\.．]\s*")
+
+
+def _write_questions_jsonl(path: Path, pages: list[PageResult]) -> int:
+    """One JSON object per MCQ (question_id); blank-line boundaries already in .tex/.txt."""
+    import json
+
+    rows: list[dict] = []
+    for pr in pages:
+        polished = {
+            int(m.group(1)): chunk
+            for chunk in split_question_chunks(pr.txt or pr.draft or "")
+            if (m := _QID_LINE.match(chunk.strip()))
+        }
+        for b in sorted(pr.blocks, key=lambda x: (x.page, x.order)):
+            qid = b.meta.get("question_id")
+            if not isinstance(qid, int):
+                continue
+            text = polished.get(qid) or (b.raw_text or "").strip()
+            rows.append(
+                {
+                    "question_id": qid,
+                    "page": pr.page,
+                    "block_id": b.block_id,
+                    "crop_path": str(b.crop_path) if b.crop_path else None,
+                    "text": text,
+                    "structured_ocr": b.meta.get("structured_ocr"),
+                }
+            )
+    rows.sort(key=lambda r: r["question_id"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return len(rows)
+
+
+def check_mcq_coverage(pages: list[PageResult]) -> dict[str, object]:
+    """Report mandatory DSE Paper 2 Q1--Q45 coverage without blocking draft runs."""
+    qids = [
+        int(qid)
+        for page in pages
+        for block in page.blocks
+        if isinstance((qid := block.meta.get("question_id")), int)
+    ]
+    seen = set(qids)
+    return {
+        "complete": seen == set(range(1, 46)) and len(qids) == 45,
+        "qids": sorted(seen),
+        "missing_qids": [qid for qid in range(1, 46) if qid not in seen],
+        "duplicate_qids": sorted({qid for qid in qids if qids.count(qid) > 1}),
+    }
+
 
 
 class PipelineManager:
@@ -35,7 +90,7 @@ class PipelineManager:
         *,
         layout_engine=None,
         extract_figures: bool = True,
-        nup_enabled: bool = True,
+        nup_enabled: bool = False,
         nup_confidence_threshold: float = 0.75,
         nup_margin_norm: float = 0.01,
     ):
@@ -61,7 +116,6 @@ class PipelineManager:
         pdf_path: Path,
         *,
         limit: int = 0,
-        polish_per_page: bool = False,  # noqa: ARG002 — kept for CLI compat; always per-page
         overwrite: bool = True,
         reuse_layout: bool = False,
         single_instance_lock: bool = True,
@@ -72,8 +126,6 @@ class PipelineManager:
         """
         Order on 12GB VRAM:
           layout all pages → release Surya → route (VLM) → polish (VLM)
-
-        Content-first always polishes each page (``polish_per_page`` is ignored).
 
         When ``reuse_layout`` is True, load ``data/pdf_pages/<stem>/layout.json``
         and skip Surya (still needs page PNGs).
@@ -186,13 +238,28 @@ class PipelineManager:
         with timer.section("skip_polish" if skip_polish else "polish"):
             if skip_polish:
                 for pr in pages:
-                    pr.txt = pr.draft
-                    pr.tex = sanitize_tex_document(self.polisher.wrap_tex(pr.draft))
+                    body = encode_unicode_outside_math(pr.draft or "")
+                    pr.txt = body
+                    pr.tex = sanitize_tex_document(self.polisher.wrap_tex(body))
             else:
-                # Content-first: always polish each page independently for PageIR.
+                # Content-first: polish each page. MCQ keeps Stage2 crop text
+                # (sanitize) unless mcq_stage3=vlm.
                 print_stage3_start()  # DR2: once, then quiet across pages
                 for pr in pages:
-                    t, x, pw = self.polisher.polish(pr.draft)
+                    if not (pr.draft or "").strip():
+                        # Cover / empty layout pages: do not call VLM polish
+                        # (empty prompt → model echoes LATEX_MATH_RULES into body).
+                        pr.txt, pr.tex = "", sanitize_tex_document(
+                            self.polisher.wrap_tex("")
+                        )
+                        continue
+                    is_mcq = any(
+                        isinstance(b.meta.get("question_id"), int) for b in pr.blocks
+                    )
+                    if is_mcq:
+                        t, x, pw = self.polisher.polish_mcq(pr.draft)
+                    else:
+                        t, x, pw = self.polisher.polish(pr.draft)
                     for w in pw:
                         warns.add(w)
                     pr.txt, pr.tex = t, x
@@ -248,6 +315,25 @@ class PipelineManager:
             )
         for w in cf_warns:
             warns.add(w)
+
+        n_q = sum(
+            1
+            for pr in pages
+            for b in pr.blocks
+            if isinstance(b.meta.get("question_id"), int)
+        )
+        questions_path = None
+        if n_q:
+            questions_path = self.output_dir / f"{artifact_source}.questions.jsonl"
+            written = _write_questions_jsonl(questions_path, pages)
+            print(f"[MCQ] Wrote {questions_path.name} ({written} questions)", flush=True)
+            coverage = check_mcq_coverage(pages)
+            if not coverage["complete"]:
+                warns.add(
+                    "mcq coverage incomplete: "
+                    f"missing={coverage['missing_qids']} "
+                    f"duplicates={coverage['duplicate_qids']}"
+                )
 
         timings = timer.as_dict()
         print("TIMING: " + " ".join(f"{name}={value:.3f}s" for name, value in timings.items()))

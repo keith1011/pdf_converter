@@ -1,4 +1,4 @@
-"""T2: polish_per_page must emit a single document preamble."""
+"""Per-page TeX bodies must merge into a single document preamble."""
 
 from __future__ import annotations
 

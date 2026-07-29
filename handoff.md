@@ -97,7 +97,7 @@ Contract: `homelab/DATA_PLANE.md` + design `DONE.json` schema.
 
 ### Uncommitted paths (verify with `git status` / diffs)
 
-- `src/ocr_pipeline/vlm_client.py`, `glm_client.py` — greedy `build_generation_kwargs`
+- `src/ocr_pipeline/vlm_client.py` — Qwen greedy `build_generation_kwargs`
 - `src/ocr_pipeline/layout.py` — `_stop_surya_docker_vlms` + GPU headroom wait in `release()`
 - `src/ocr_pipeline/segmenter.py`, `prompts.py` (TABLE_ROUTER linear), `formula_integrity.py`, content-first related
 - `config/ocr_pipeline.yaml` — `temperature: 0.0`

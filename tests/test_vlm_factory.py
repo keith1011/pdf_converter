@@ -1,9 +1,10 @@
-"""T7: VlmClient factory selects Qwen vs GLM without loading weights."""
+"""VLM factory builds the locked Qwen backend without loading weights."""
 
 from __future__ import annotations
 
-from ocr_pipeline.glm_client import Glm46VFlashClient
-from ocr_pipeline.vlm_client import Qwen25VlClient, build_vlm_client
+import pytest
+
+from ocr_pipeline.vlm_client import QwenVlClient, build_vlm_client
 
 
 def test_default_backend_is_qwen_when_vlm_block_present():
@@ -11,26 +12,35 @@ def test_default_backend_is_qwen_when_vlm_block_present():
         {
             "vlm": {
                 "backend": "qwen",
-                "model_name": "Qwen/Qwen2.5-VL-7B-Instruct",
+                "model_name": "Qwen/Qwen3-VL-8B-Instruct",
                 "load_in_4bit": True,
             }
         }
     )
-    assert isinstance(client, Qwen25VlClient)
-    assert client.model_name == "Qwen/Qwen2.5-VL-7B-Instruct"
+    assert isinstance(client, QwenVlClient)
+    assert client.model_name == "Qwen/Qwen3-VL-8B-Instruct"
     assert client.load_in_4bit is True
 
 
-def test_glm_backend_selected():
+def test_qwen25_model_name_still_builds_qwen_client():
     client = build_vlm_client(
         {
-            "vlm": {"backend": "glm", "model_name": "zai-org/GLM-4.6V-Flash"},
-            "glm": {"model_name": "zai-org/GLM-4.6V-Flash"},
+            "vlm": {
+                "backend": "qwen",
+                "model_name": "Qwen/Qwen2.5-VL-7B-Instruct",
+            }
         }
     )
-    assert isinstance(client, Glm46VFlashClient)
+    assert isinstance(client, QwenVlClient)
+    assert "Qwen2.5-VL" in client.model_name
 
 
-def test_legacy_glm_only_config():
-    client = build_vlm_client({"glm": {"model_name": "zai-org/GLM-4.6V-Flash"}})
-    assert isinstance(client, Glm46VFlashClient)
+def test_build_vlm_client_default_model_is_qwen3():
+    client = build_vlm_client({"vlm": {"backend": "qwen"}})
+    assert isinstance(client, QwenVlClient)
+    assert client.model_name == "Qwen/Qwen3-VL-8B-Instruct"
+
+
+def test_unknown_backend_is_rejected():
+    with pytest.raises(ValueError, match="Unknown VLM backend"):
+        build_vlm_client({"vlm": {"backend": "unknown"}})

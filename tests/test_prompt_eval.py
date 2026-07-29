@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from ocr_pipeline.assemble import FinalPolisher
-from ocr_pipeline.prompts import CONTENT_FIRST_POLISH_PROMPT, LATEX_MATH_RULES, POLISH_PROMPT_HEADER
+from ocr_pipeline.prompts import CONTENT_FIRST_POLISH_PROMPT, LATEX_MATH_RULES
 
 
 def test_cuda_required_for_prompt_eval_suite():
@@ -24,7 +24,6 @@ def test_cuda_required_for_prompt_eval_suite():
 def test_content_first_prompt_contract_static():
     """Always runs: content-first header is wired (no GPU)."""
     assert FinalPolisher.prompt_header() == CONTENT_FIRST_POLISH_PROMPT
-    assert POLISH_PROMPT_HEADER == CONTENT_FIRST_POLISH_PROMPT
     assert LATEX_MATH_RULES in CONTENT_FIRST_POLISH_PROMPT
     assert "將圖片" in CONTENT_FIRST_POLISH_PROMPT
     assert "tabular" in CONTENT_FIRST_POLISH_PROMPT.lower()
@@ -52,7 +51,7 @@ def test_vlm_polish_smoke():
     if not torch.cuda.is_available():
         pytest.fail("CUDA required for prompt eval (12C); no auto-skip")
 
-    from ocr_pipeline.vlm_client import Qwen25VlClient, build_vlm_client
+    from ocr_pipeline.vlm_client import QwenVlClient, build_vlm_client
 
     client = build_vlm_client(
         {
@@ -65,7 +64,7 @@ def test_vlm_polish_smoke():
             }
         }
     )
-    assert isinstance(client, Qwen25VlClient)
+    assert isinstance(client, QwenVlClient)
     assert client.model is None  # not loaded yet — avoid heavy smoke
     assert FinalPolisher.prompt_header() == CONTENT_FIRST_POLISH_PROMPT
     assert torch.cuda.is_available()

@@ -6,9 +6,8 @@ from pathlib import Path
 from ocr_pipeline.engines.base import EngineError, FormulaEngine, LayoutEngine, TextEngine
 from ocr_pipeline.engines.surya_layout import SuryaLayoutEngine
 from ocr_pipeline.engines.timing import StageTimer
-from ocr_pipeline.engines.vlm_formula import VlmFormulaEngine
 from ocr_pipeline.engines.vlm_text import VlmTextEngine
-from ocr_pipeline.models import BlockType, BBox, LayoutBlock
+from ocr_pipeline.models import BBox, BlockType, LayoutBlock
 
 
 class FakeLayout:

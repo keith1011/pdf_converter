@@ -13,7 +13,7 @@ from ocr_pipeline.compile_check import CompileResult, maybe_check_compile
 
 
 def test_run_ocr_pipeline_parser_exposes_check_compile():
-    parser = run_ocr_pipeline.build_parser({"polish_per_page": False})
+    parser = run_ocr_pipeline.build_parser({})
     args = parser.parse_args(["dummy.pdf", "--check-compile"])
     assert args.check_compile is True
     args_off = parser.parse_args(["dummy.pdf"])

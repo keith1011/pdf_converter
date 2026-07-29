@@ -1,7 +1,8 @@
+from pathlib import Path
+
 from ocr_pipeline.assemble import DraftAssembler
 from ocr_pipeline.content_first import build_page_ir_from_stitched
 from ocr_pipeline.models import BBox, BlockType, LayoutBlock
-from pathlib import Path
 
 
 def test_stitch_markers_assign_version_id_on_segments():

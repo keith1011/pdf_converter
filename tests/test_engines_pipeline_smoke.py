@@ -61,6 +61,7 @@ def test_skip_polish_uses_draft_and_tags_output(tmp_path, capsys):
         polisher=BoomPolisher(),
         output_dir=tmp_path / "out",
         pages_dir=tmp_path / "pages",
+        nup_enabled=False,
     )
 
     result = mgr.run(

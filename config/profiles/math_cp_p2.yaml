@@ -1,0 +1,30 @@
+id: math_cp_p2
+dual_column: false
+stem_opener:
+  # line-start / left-gutter biased; not bare mid-line "1."
+  # \\s* (not \\s+): RapidOCR often emits lone "8." or "11．設…" with no space after the dot
+  patterns:
+    - "^\\s*(\\d{1,2})[.．]\\s*"
+    - "^\\s*\\((\\d{1,2})\\)\\s*"
+option_anchors:
+  letters: ["A", "B", "C", "D"]
+  patterns:
+    - "^[A-D][.．、)]\\s*"
+    - "^\\([A-D]\\)\\s*"
+margins:
+  left_bias_ratio: 0.25
+min_option_hits: 3
+pad_px: 8
+# DSE MATH CP Paper 2 has 45 MCQs
+question_id_min: 1
+question_id_max: 45
+require_increasing_ids: true
+drop_incomplete: true
+recover_orphan_options: true
+content_x_max_ratio: 0.96
+preamble_max_gap_px: 120
+below_options_pad_px: 48
+# Leading orphan qid/formula may sit above the first line seen by RapidOCR.
+leading_orphan_top_pad_px: 64
+# Stay above footer chrome (~y=2222 on 2339px pages). Last-on-page extends to page_h - this.
+footer_margin_px: 160

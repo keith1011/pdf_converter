@@ -6,9 +6,9 @@ import argparse
 import os
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 from .job_stage import stage_job_dir
 

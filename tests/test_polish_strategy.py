@@ -60,6 +60,7 @@ def test_pipeline_always_polishes_each_page_even_when_flag_false(tmp_path: Path)
         CountingPolisher(),
         output_dir=tmp_path / "out",
         pages_dir=tmp_path / "pages",
+        nup_enabled=False,
     )
-    mgr.run(pdf, polish_per_page=False, single_instance_lock=False, warns=WarnCollector())
+    mgr.run(pdf, single_instance_lock=False, warns=WarnCollector())
     assert calls["polish"] == 1

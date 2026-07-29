@@ -63,6 +63,7 @@ def test_single_short_page_pageir_uses_polished_body_not_stage2_markdown(tmp_pat
         _LinearPolisher(),
         output_dir=output,
         pages_dir=tmp_path / "pages",
+        nup_enabled=False,
     )
 
     result = manager.run(pdf, warns=WarnCollector())
@@ -119,6 +120,7 @@ def test_pipeline_exports_figures_and_merges_them_into_pageir(tmp_path: Path, mo
         _LinearPolisher(),
         output_dir=output,
         pages_dir=tmp_path / "pages",
+        nup_enabled=False,
     )
 
     result = manager.run(pdf, warns=WarnCollector())

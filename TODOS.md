@@ -64,11 +64,11 @@
 **Priority:** P3  
 **Depends on:** Ship 1 content-first green; VlmClient seam landed
 
-### VlmClient seam + Qwen2.5-VL-7B 4bit default
+### VlmClient seam + Qwen3-VL-8B 4bit default
 
-**Status:** implemented in code (T7) — smoke-load on GPU still pending golden run
+**Status:** implemented and verified on the DSE Paper 2 golden run
 
-**What:** `VlmClient` protocol + `Qwen25VlClient` default; GLM adapter via `vlm.backend: glm`.
+**What:** `VlmClient` protocol + `QwenVlClient` locked to the Qwen backend.
 
 **Files:** `src/ocr_pipeline/vlm_client.py`, `factory.py`, `arrange_only.py`, `config/ocr_pipeline.yaml`
 
