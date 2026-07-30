@@ -11,6 +11,7 @@ from ocr_pipeline.mcq_structured import (
     InstructorMcqOcrClient,
     McqChoices,
     McqOcrResult,
+    parse_stage2_text,
     render_text,
 )
 from ocr_pipeline.models import BBox, BlockType, LayoutBlock, PageResult
@@ -73,6 +74,25 @@ def test_schema_does_not_accept_question_id_from_vlm():
 
 def test_uncertain_token_forces_requires_review():
     result = _result(uncertain_tokens=["β?"])
+    assert result.requires_review is True
+
+
+def test_local_stage2_parser_validates_order_and_content():
+    result = parse_stage2_text("1. stem\nA. one\nB. two\nC. three\nD. four")
+    assert result.stem == "stem"
+    assert list(result.choices.model_dump()) == ["A", "B", "C", "D"]
+
+
+def test_local_stage2_parser_rejects_missing_or_misordered_choices():
+    with pytest.raises(ValueError, match="exactly A-D"):
+        parse_stage2_text("stem\nA. one\nC. three\nB. two\nD. four")
+    with pytest.raises(ValueError, match="cannot be empty"):
+        parse_stage2_text("stem\nA. one\nB. \nC. three\nD. four")
+
+
+def test_local_stage2_parser_marks_uncertain_tokens_for_review():
+    result = parse_stage2_text("stem ?\nA. one\nB. two\nC. three\nD. four")
+    assert result.uncertain_tokens
     assert result.requires_review is True
 
 
@@ -269,3 +289,52 @@ def test_structured_backend_is_opt_in_and_transformers_qwen_remains_default():
     )
     assert isinstance(client, QwenVlClient)
     assert client.load_in_4bit is True
+
+def test_local_mcq_validation_renders_stem_and_choices_as_five_lines():
+    class PlainEngine:
+        def ocr(self, crop_path, *, prompt=None):
+            return (
+                "設\n"
+                "k\n"
+                "為一常數。若\n"
+                "f(x)=2x^{2}-5x+k，\n"
+                "則\n"
+                "$f(2)-f(-2)=$\n"
+                "A. -20。\n"
+                "B. 0。\n"
+                "C. 16。\n"
+                "D. 2k。"
+            )
+
+    block = _block(6)
+
+    TextRouter(
+        text_engine=PlainEngine(),
+        local_mcq_validation_enabled=True,
+    ).process(block)
+
+    assert block.raw_text == (
+        "6. 設 k 為一常數。若 f(x)=2x^{2}-5x+k，則 $f(2)-f(-2)=$\n"
+        "A. -20。\n"
+        "B. 0。\n"
+        "C. 16。\n"
+        "D. 2k。"
+    )
+
+    def test_parser_removes_layout_spaces_around_chinese_punctuation():
+        raw = """設
+                k
+                為一常數。若
+                f(x)=2x^{2}-5x+k，
+                則
+                $f(2)-f(-2)=$
+                A. -20。
+                B. 0。
+                C. 16。
+                D. 2k。"""
+
+        result = parse_stage2_text(raw)
+
+        assert result.stem == (
+            "設 k 為一常數。若 f(x)=2x^{2}-5x+k，則 $f(2)-f(-2)=$"
+    )

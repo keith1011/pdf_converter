@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol, cast, runtime_checkable
@@ -20,6 +21,20 @@ Return only the structured fields required by the response schema.
 - Do not solve the question or infer missing mathematical content.
 """.strip()
 
+_OPTION_LINE = re.compile(r"^\s*([A-D])\s*[.．:：]\s*(.*)$")
+_QUESTION_OPENER = re.compile(r"^\s*\d{1,2}\s*[.．:：]\s*")
+
+def _join_ocr_lines(parts: list[str]) -> str:
+    """join PDF layout lines into one natural sentence."""
+    text = " ".join(part.strip() for part in parts if part.strip())
+
+        # 中文標點前面不要有空格
+    text = re.sub(r"\s+([，。；：！？、）】」』])", r"\1", text)
+
+        # 中文標點或左括號後面不要有空格
+    text = re.sub(r"([，。；：！？、（【「『])\s+", r"\1", text)
+
+    return text.strip()
 
 class McqChoices(BaseModel):
     """Exactly the four visible answer choices."""
@@ -68,6 +83,51 @@ def render_text(question_id: int, result: McqOcrResult) -> str:
         )
     )
     return "\n".join(lines)
+
+
+def parse_stage2_text(text: str) -> McqOcrResult:
+    """Parse and validate local Stage2 OCR without calling another model."""
+    lines = [line.rstrip() for line in (text or "").replace("\r\n", "\n").split("\n")]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if lines and _QUESTION_OPENER.match(lines[0]):
+        lines[0] = _QUESTION_OPENER.sub("", lines[0], count=1)
+
+    options: list[tuple[str, list[str]]] = []
+    stem_lines: list[str] = []
+    current: tuple[str, list[str]] | None = None
+    for line in lines:
+        match = _OPTION_LINE.match(line)
+        if match:
+            current = (match.group(1), [match.group(2).strip()])
+            options.append(current)
+        elif current is None:
+            stem_lines.append(line.strip())
+        elif line.strip():
+            current[1].append(line.strip())
+
+    if not options:
+        raise ValueError("missing choices A-D")
+    labels = [label for label, _ in options]
+    if labels != ["A", "B", "C", "D"]:
+        raise ValueError(f"choices must be exactly A-D in order; got {labels}")
+    stem = _join_ocr_lines(stem_lines)
+    if not stem:
+        raise ValueError("stem cannot be empty")
+    choice_values = [_join_ocr_lines(parts) for _, parts in options]
+    if any(not value for value in choice_values):
+        raise ValueError("choice content cannot be empty")
+    uncertain_tokens = sorted(set(re.findall(r"\S*\?\S*", text or "")))
+    return McqOcrResult(
+        stem=stem,
+        choices=McqChoices(
+            A=choice_values[0],
+            B=choice_values[1],
+            C=choice_values[2],
+            D=choice_values[3],
+        ),
+        uncertain_tokens=uncertain_tokens,
+    )
 
 
 @runtime_checkable

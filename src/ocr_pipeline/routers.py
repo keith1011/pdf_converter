@@ -78,6 +78,7 @@ class TextRouter:
         max_new_tokens: int | None = None,
         structured_ocr_client=None,
         structured_ocr_shadow_mode: bool = True,
+        local_mcq_validation_enabled: bool = True,
     ):
         self.vlm = vlm
         self.model_name = model_name
@@ -86,6 +87,7 @@ class TextRouter:
         self.max_new_tokens = max_new_tokens
         self.structured_ocr_client = structured_ocr_client
         self.structured_ocr_shadow_mode = structured_ocr_shadow_mode
+        self.local_mcq_validation_enabled = local_mcq_validation_enabled
 
     def _prompt_for(self, block: LayoutBlock) -> str:
         if isinstance(block.meta.get("question_id"), int):
@@ -112,8 +114,29 @@ class TextRouter:
                 image_path=block.crop_path,
                 max_new_tokens=self.max_new_tokens,
             ).strip()
+        self._attach_local_mcq_validation(block)
         self._attach_mcq_structured_ocr(block, prompt)
         return block
+
+    def _attach_local_mcq_validation(self, block: LayoutBlock) -> None:
+        if not self.local_mcq_validation_enabled:
+            return
+        question_id = block.meta.get("question_id")
+        if not isinstance(question_id, int):
+            return
+        from .mcq_structured import parse_stage2_text, render_text
+
+        try:
+            result = parse_stage2_text(block.raw_text or "")
+        except Exception as exc:
+            block.meta["structured_ocr"] = None
+            block.meta["structured_ocr_source"] = "local_stage2"
+            block.meta["structured_ocr_error"] = type(exc).__name__
+            return
+        block.meta["structured_ocr"] = result.model_dump(mode="json")
+        block.meta["structured_ocr_source"] = "local_stage2"
+
+        block.raw_text = render_text(question_id, result)
 
     def _attach_mcq_structured_ocr(self, block: LayoutBlock, prompt: str) -> None:
         question_id = block.meta.get("question_id")
