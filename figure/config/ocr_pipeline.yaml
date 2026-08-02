@@ -1,0 +1,81 @@
+# New OCR pipeline (MinerU layout + Qwen3-VL text/formula)
+
+layout:
+  dpi: 200
+  device: "cuda"
+  # surya_v2 needs Docker+vLLM on Windows; code auto-falls back to full-page
+  # force: surya | fullpage
+  force_backend: ""
+
+engines:
+  # TRUNK LOCKED 2026-07-24 (user): MinerU layout + Qwen text + Qwen formula.
+  # 2026-07-27: default weights → Qwen/Qwen3-VL-8B-Instruct (4bit).
+  # Specialty knives (got / unimernet) are formula-only experiments — never default text path.
+  # Runtime: MinerU lives in `.venv-mineru312` (transformers 4.57); main `.venv` may lack mineru.
+  layout: "mineru"    # mineru (trunk) | surya | doclayout_yolo
+  text: "vlm"         # vlm (= Qwen) | ppocr
+  formula: "vlm"      # vlm (= Qwen) | got | unimernet (specialty only)
+
+# Default VLM: Qwen3-VL-8B-Instruct 4bit.
+vlm:
+  backend: "qwen"
+  model_name: "Qwen/Qwen3-VL-8B-Instruct"
+  load_in_4bit: true
+  # Stage3 polish (per page). 2048 is enough for typical exam pages; raise if truncated.
+  max_new_tokens: 2048
+  # Stage2 crop OCR (math/text/table). MCQ full-stem+A–D crops need headroom.
+  max_new_tokens_route: 1536
+  temperature: 0.0
+  max_pixels: 1003520
+
+# Optional DSE MCQ Stage2 structured shadow output.
+# The trunk remains local Transformers Qwen3-VL 4-bit. Enable this only when an
+# OpenAI-compatible vision endpoint is available; no secret belongs in this file.
+structured_ocr:
+  enabled: false
+  backend: "instructor_openai"
+  provider: "openai/Qwen/Qwen3-VL-8B-Instruct"
+  model_name: "Qwen/Qwen3-VL-8B-Instruct"
+  base_url: ""
+  api_key_env: ""
+  shadow_mode: true
+  max_validation_retries: 1
+
+# Local-only validation of the existing Stage2 text. This never calls Instructor
+# or any external model and is independent from structured_ocr.enabled.
+local_mcq_validation:
+  enabled: true
+
+paths:
+  sources_dir: "data/sources"
+  pages_dir: "data/pdf_pages"
+  output_dir: "output"
+  crop_dir: "output/crops"
+
+# Pre-MinerU N-up gate (classifier + fixed midline / 2×2 crop). See
+# docs/superpowers/specs/2026-07-25-nup-classifier-crop-design.md
+# Off for now: prefer manually flattened single-page PDFs before OCR.
+nup:
+  enabled: false
+  confidence_threshold: 0.70
+  margin_norm: 0.01
+
+pipeline:
+  # Write draft text directly into content-first artifacts (no Stage3 VLM call).
+  skip_polish: false
+  # DSE MCQ Stage3: sanitize = keep Stage2 crop text + pylatexenc (default);
+  # vlm = per-question MCQ_POLISH_PROMPT (no solving; slower).
+  mcq_stage3: sanitize
+  # Optional artifact suffix, e.g. `123.got-ppocr.tex`.
+  output_tag: ""
+  # Do not OCR figures into the Stage2 draft stitch; crops are still kept for captioning.
+  skip_figures: true
+  # Write figures/*.png and Qwen captions into PageIR (ingest contract).
+  extract_figures: true
+  # Refuse a second concurrent run_ocr_pipeline (12GB VRAM)
+  single_instance_lock: true
+
+figure_classification:
+  enabled: true
+  max_new_tokens: 256
+  prompt_version: "figure-b2-v1"
