@@ -225,3 +225,63 @@ def test_from_b1_preserves_source_and_provenance() -> None:
     assert b2.figure_type == "unknown"
     assert b2.source == b1.source
     assert b2.provenance == b1.provenance
+
+
+def test_failed_classification_requires_audit_metadata() -> None:
+    with pytest.raises(ValidationError):
+        FigureClassification.model_validate(
+            {
+                "status": "failed",
+                "error": "response is not valid JSON",
+            }
+        )
+
+    failed = FigureClassification.model_validate(
+        {
+            "status": "failed",
+            "error": "response is not valid JSON",
+            "response_path": "classification_response.txt",
+            "response_sha256": "d" * 64,
+            "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+            "quantization": "4-bit",
+            "prompt_version": "figure-b2-v1",
+        }
+    )
+
+    assert failed.response_path == "classification_response.txt"
+    assert failed.response_sha256 == "d" * 64
+    assert failed.model_id == "Qwen/Qwen3-VL-8B-Instruct"
+
+
+def test_response_reference_requires_safe_paired_path_and_hash() -> None:
+    base = {
+        "status": "failed",
+        "error": "response is not valid JSON",
+        "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+        "quantization": "4-bit",
+        "prompt_version": "figure-b2-v1",
+    }
+
+    with pytest.raises(ValidationError):
+        FigureClassification.model_validate(
+            {
+                **base,
+                "response_path": "../classification_response.txt",
+                "response_sha256": "d" * 64,
+            }
+        )
+    with pytest.raises(ValidationError):
+        FigureClassification.model_validate(
+            {
+                **base,
+                "response_path": "classification_response.txt",
+            }
+        )
+    with pytest.raises(ValidationError):
+        FigureClassification.model_validate(
+            {
+                **base,
+                "response_path": "classification_response.txt",
+                "response_sha256": "not-a-sha256",
+            }
+        )

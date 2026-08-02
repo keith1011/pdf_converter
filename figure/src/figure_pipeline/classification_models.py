@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from .models import FigureAsset, StrictModel
 
@@ -18,6 +19,7 @@ VisualFamily = Literal[
 ]
 
 EvidenceItem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+_RESPONSE_SHA256_PATTERN = r"^[0-9a-f]{64}$"
 
 SUBTYPE_BY_FAMILY: dict[str, frozenset[str]] = {
     "geometry": frozenset(
@@ -107,9 +109,25 @@ class FigureClassification(StrictModel):
     proposed: ClassificationProposal | None = None
     reviewed: ReviewedClassification | None = None
     status: Literal["pending", "approved", "corrected", "rejected", "failed"] = "pending"
-    response_path: str | None = None
-    response_sha256: str | None = None
+    response_path: str | None = Field(default=None, min_length=1)
+    response_sha256: str | None = Field(
+        default=None,
+        pattern=_RESPONSE_SHA256_PATTERN,
+    )
     error: str | None = None
+    model_id: str | None = Field(default=None, min_length=1)
+    quantization: Literal["4-bit"] | None = None
+    prompt_version: Literal["figure-b2-v1"] | None = None
+
+    @field_validator("response_path")
+    @classmethod
+    def validate_response_path(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        path = PurePosixPath(value.replace("\\", "/"))
+        if path.is_absolute() or ".." in path.parts or str(path) in {"", "."}:
+            raise ValueError("response_path must be a safe relative path")
+        return path.as_posix()
 
     @model_validator(mode="after")
     def validate_state(self) -> FigureClassification:
@@ -130,6 +148,19 @@ class FigureClassification(StrictModel):
                 raise ValueError("failed classification requires an error")
         if self.status != "failed" and self.error is not None:
             raise ValueError("error is only valid for failed classification")
+
+        response_reference = (self.response_path, self.response_sha256)
+        if (self.response_path is None) != (self.response_sha256 is None):
+            raise ValueError("response_path and response_sha256 must be provided together")
+
+        failure_metadata = (self.model_id, self.quantization, self.prompt_version)
+        if self.status == "failed":
+            if any(value is None for value in response_reference):
+                raise ValueError("failed classification requires a raw response reference")
+            if any(value is None for value in failure_metadata):
+                raise ValueError("failed classification requires model metadata")
+        elif any(value is not None for value in failure_metadata):
+            raise ValueError("top-level model metadata is only valid for failed classification")
         return self
 
 
