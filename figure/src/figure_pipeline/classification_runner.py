@@ -18,14 +18,14 @@ from .classification_prompt import (
     FIGURE_CLASSIFICATION_PROMPT,
     FIGURE_CLASSIFICATION_PROMPT_VERSION,
 )
-from .models import FigureAsset
+from .models import FigureAsset, resolve_bundle_path
 from .proposal import sha256_file
 
 
 def _load_b1_asset(source_dir: Path) -> tuple[FigureAsset, Path]:
     asset_path = source_dir / "figure_asset.json"
     asset = FigureAsset.model_validate_json(asset_path.read_text(encoding="utf-8"))
-    crop_path = source_dir / asset.source.crop_path
+    crop_path = resolve_bundle_path(source_dir, asset.source.crop_path)
     if not crop_path.is_file():
         raise FileNotFoundError(crop_path)
     if sha256_file(crop_path) != asset.source.sha256:
@@ -126,7 +126,7 @@ def classify_bundle(
         json_path = stage / "figure_asset.json"
         _write_asset(json_path, classified)
 
-        copied_crop = stage / classified.source.crop_path
+        copied_crop = resolve_bundle_path(stage, classified.source.crop_path)
         if sha256_file(copied_crop) != classified.source.sha256:
             raise RuntimeError("copied figure crop hash mismatch")
         round_trip = ClassifiedFigureAsset.model_validate_json(

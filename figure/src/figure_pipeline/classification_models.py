@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
 from pydantic import Field, StringConstraints, field_validator, model_validator
 
-from .models import FigureAsset, StrictModel
+from .models import FigureAsset, StrictModel, _valid_relative_path
 
 VisualFamily = Literal[
     "geometry",
@@ -124,10 +123,10 @@ class FigureClassification(StrictModel):
     def validate_response_path(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        path = PurePosixPath(value.replace("\\", "/"))
-        if path.is_absolute() or ".." in path.parts or str(path) in {"", "."}:
-            raise ValueError("response_path must be a safe relative path")
-        return path.as_posix()
+        try:
+            return _valid_relative_path(value)
+        except ValueError as exc:
+            raise ValueError("response_path must be a safe relative path") from exc
 
     @model_validator(mode="after")
     def validate_state(self) -> FigureClassification:

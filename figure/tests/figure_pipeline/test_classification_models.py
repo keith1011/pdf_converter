@@ -285,3 +285,30 @@ def test_response_reference_requires_safe_paired_path_and_hash() -> None:
                 "response_sha256": "not-a-sha256",
             }
         )
+
+
+@pytest.mark.parametrize(
+    "unsafe_path",
+    [
+        "/classification_response.txt",
+        r"C:\outside\classification_response.txt",
+        r"C:outside\classification_response.txt",
+        r"\outside\classification_response.txt",
+        r"\\server\share\classification_response.txt",
+    ],
+)
+def test_response_reference_rejects_paths_outside_bundle(
+    unsafe_path: str,
+) -> None:
+    with pytest.raises(ValidationError):
+        FigureClassification.model_validate(
+            {
+                "status": "failed",
+                "error": "response is not valid JSON",
+                "response_path": unsafe_path,
+                "response_sha256": "d" * 64,
+                "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+                "quantization": "4-bit",
+                "prompt_version": "figure-b2-v1",
+            }
+        )
