@@ -1,0 +1,2 @@
+# Dev / lint only — does not replace requirements-ocr-pipeline.txt
+ruff>=0.11

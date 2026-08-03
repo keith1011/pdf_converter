@@ -1,0 +1,4 @@
+homelab/.env
+*.log
+.wave1_poll*.log
+.ufw_poll*.log

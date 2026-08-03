@@ -1,0 +1,148 @@
+"""Shared prompt rules: all formulas/equations must be proper LaTeX."""
+
+from __future__ import annotations
+
+# Canonical math rules injected into Stage2 + Stage3 prompts.
+LATEX_MATH_RULES = """
+【數學公式硬性規則 — 全部必須遵守】
+凡是公式 / 方程式 / 代數表達式，一律輸出「標準 LaTeX」，禁止純文字寫法：
+
+1. 分數：禁止 a/b 或 a÷b → 必須 \\frac{a}{b}
+2. 指數：禁止 Unicode 上標（如 x²、n⁹）→ 必須 x^{2}、n^{9}
+3. 下標：禁止 Unicode 下標 → 必須 a_{1}、x_{i}
+4. 根號：禁止 √ → 必須 \\sqrt{...} 或 \\sqrt[n]{...}
+5. 乘號：變數相乘可寫 xy 或 x\\cdot y；禁止用 × 字元，改 \\times
+6. 獨立成行的公式／方程式（正文，不在表格內）：用 $$...$$
+7. 行內公式（夾在文句中）：用 $...$
+8. 表格／tabular 儲存格內：只用 $...$，禁止 $$...$$
+9. 希臘字母：α→\\alpha，β→\\beta，π→\\pi，θ→\\theta，Δ→\\Delta 等
+10. 不等號：≤→\\le，≥→\\ge，≠→\\ne，≈→\\approx
+11. 絕對值：|x| → \\lvert x\\rvert 或 |x|（在數學模式內）
+12. 禁止輸出「看起來像數學的純文字」；每個公式都要能直接放進 LaTeX 編譯。
+""".strip()
+
+
+MATH_ROUTER_PROMPT = f"""你正在看一張「獨立數學公式／方程式」圖片。
+
+任務：只輸出該公式的標準 LaTeX 本體（不要 $$ 包裹、不要說明、不要 markdown）。
+
+{LATEX_MATH_RULES}
+
+只輸出公式本身，例如：
+\\frac{{n^{{9}}}}{{(m^{{3}}n^{{-7}})^{{5}}}}
+"""
+
+
+TEXT_ROUTER_PROMPT = f"""請提取圖片中的全部文字，保持繁體中文與英文原貌。
+
+{LATEX_MATH_RULES}
+
+【試卷／選擇題結構】
+- 這可能是整題、半題或單一選項／公式碎片；只輸出「圖中可見」的文字，禁止補全未出現的題幹或選項。
+- 若看到選項，盡量維持「A. 內容」同一行（或緊接下一行），不要把「A.」與內容拆成無關碎片說明。
+- 標點（。．）跟著前文；不要單獨輸出一個句號當一整段。
+- 看不清的字用 ?，不要猜測發明。
+
+額外：
+- 行內公式用 $...$ 包裹。
+- 獨立成行的公式／方程式用 $$...$$。
+- 不加任何解釋、標題或 markdown 圍欄。
+"""
+
+
+# DSE Paper2 MCQ crop (Stage2): Qwen3-VL prefers short OCR-style prompts
+# (see Qwen3-VL cookbooks: "Read all the text in the image.") over long Qwen2.5 rule sheets.
+MCQ_ROUTER_PROMPT = """請依閱讀順序，輸出這張選擇題裁切圖中的全部可見文字。
+
+要求：
+- 包含題號、題幹、以及圖中可見的 A B C D 選項（不可省略選項）。
+- 保持繁體中文；公式用 $...$。
+- 貨幣金額前的 dollar sign 是可見文字，必須逐一輸出為 LaTeX literal \\$（例如 A. \\$88），不可省略或當成公式 delimiter。
+- 公式中的底數、指數、分子、分母及符號須逐一照圖抄錄；不可化簡、補全或改寫。
+- 不要解題、不要推導、不要寫「故／因此／答案」。
+- 題幹與選項之間不要空行；選項各一行：A. … / B. … / C. … / D. …
+- 只輸出正文，不要說明或 markdown。
+"""
+
+
+MCQ_POLISH_PROMPT = f"""你是 OCR 草稿校對員（不是解題老師）。請將以下「單題 MCQ 草稿」輕量修正為可排版文字。
+
+{LATEX_MATH_RULES}
+
+【MCQ 硬性規則 — 全部必須遵守】
+1. 禁止解題、推導、驗算、展開；禁止新增「故／因此／答案為／選項為」等解題句。
+2. 不要發明草稿沒有的內容；只修正明顯 OCR 錯字與破碎 LaTeX。
+3. 必須保留題號與 A–D 四個選項（若草稿已有）；禁止刪選項、禁止只留題幹。
+4. 選項格式維持「A. …」「B. …」「C. …」「D. …」；可把「A.」與內容併回同一行；題幹與選項間不要空行。
+5. 禁止把選擇題改寫成計算步驟或證明。
+6. 文件可用 \\documentclass[12pt]{{ctexart}} + amsmath；或至少輸出 document body。
+7. <<<TEX>>> 內禁止 markdown 圍欄與前後說明。
+
+請嚴格用下列標記輸出兩段（不要其他說明）：
+
+<<<TXT>>>
+（純文本；公式用 $...$；保留題號與 A–D；無解題）
+<<<TEX>>>
+（完整可編譯 LaTeX document，或至少 \\begin{{document}}...\\end{{document}} 內正文）
+
+草稿：
+"""
+
+
+TABLE_ROUTER_PROMPT = f"""請將圖片中的「評分表／解題表」轉成直式一行一步的純文字（內容優先）。
+保持繁體中文與英文原貌。
+
+{LATEX_MATH_RULES}
+
+【內容優先硬性規則 — 全部必須遵守】
+1. 禁止 Markdown 表格（不要用 | --- |）。
+2. 禁止輸出 LaTeX tabular / longtable / \\hline / \\begin{{table}}。
+3. 依閱讀順序逐行輸出：解題步驟、公式、分數註記（如 1M、1A）各佔一行。
+4. 公式用 $...$；禁止把「分」「備註」「1M」「1A」寫進數學模式。
+5. 不加任何解釋、標題或 markdown 圍欄。
+"""
+
+
+CONTENT_FIRST_POLISH_PROMPT = f"""你是一個 LaTeX 排版專家。請將以下草稿內容修正並排版（內容優先／直式一行一步）。
+
+{LATEX_MATH_RULES}
+
+【內容優先硬性規則 — 全部必須遵守】
+1. 禁止輸出「以下是將圖片…轉換」等說明／開場白；禁止任何「將圖片轉換為文字」類 meta 句。
+2. 不要用 tabular / longtable 當目標排版；改為直式一行一步（正文＋公式依序輸出）。
+3. 每個公式必須完整：禁止在 \\frac 中間用 \\\\ 切開；禁止把「分」「1M」「1A」寫進數學模式。
+4. 行內／直式公式一律用 $...$（不要用表格包公式）。
+5. 繁體中文流暢；修正明顯 OCR 錯字；不要發明草稿沒有的內容。
+6. 文件可用 \\documentclass[12pt]{{ctexart}}，並 \\usepackage{{amsmath,amssymb}}；或至少輸出 document body。
+7. 不要輸出 <|end_of_box|> 或其他特殊 token。
+8. <<<TEX>>> 內只輸出完整 LaTeX 源碼（完整 document 或至少 document body），禁止 markdown 圍欄（```）與前後說明文字。
+9. 若草稿把選擇題拆成「A.」／「B.」單獨一行、下一行才是內容或句號，請合併成「A. 內容。」；不要刪題、不要重排題號。
+
+請嚴格用下列標記輸出兩段（不要其他說明）：
+
+<<<TXT>>>
+（純文本；公式用 $...$；直式一行一步；無開場白；選項盡量同行）
+<<<TEX>>>
+（完整可編譯 LaTeX document，或至少 \\begin{{document}}...\\end{{document}} 內正文）
+
+草稿：
+"""
+
+FIGURE_CAPTION_PROMPT = """你正在看一張試卷／講義中的圖（圖表、幾何圖、函數圖像、示意圖）。
+
+任務：用一句繁體中文短說明這張圖畫什麼（供題庫檢索）。
+規則：
+- 只輸出一句話，不要編號、不要 markdown、不要「這張圖是」。
+- 優先寫可見類型：如「二次函數圖像」「直角三角形與正方形」「棒形圖／折線圖」「坐標平面上的直線」。
+- 不要發明圖中沒有的數值或標籤；軸／頂點看不清可省略。
+- 僅當圖糊到無法判斷類型時，才寫「圖示（細節不清）」。
+"""
+
+MCQ_ROUTER_PROMPT = """轉錄一道數學多項選擇題，只輸出一個有效 JSON object：
+{"stem":[{"kind":"text 或 math","content":"..."}],"choices":{"A":[],"B":[],"C":[],"D":[]}}
+規則：
+1. 由你判斷並分開普通文字 text 與數學內容 math。
+2. math 使用 LaTeX，不加 `$`；貨幣的 literal dollar 寫作 `\\$`。
+3. 如實保留可見文字、符號、公式與圖形標籤；不要解題、計算、作答或解釋。
+4. 必須有 A、B、C、D 四個選項；每個選項必須是非空 span object array，不能是 string，content 不能空；content 不加題號、選項標籤或多餘換行。
+5. 不要 Markdown code fence。"""

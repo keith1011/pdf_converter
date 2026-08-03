@@ -1,0 +1,371 @@
+目前 OCR pipeline：PDF 到 TXT 的流程說明
+=========================================
+
+更新日期：2026-07-29
+適用範圍：目前 repository 的 DSE MATH CP Paper 2 MCQ locked pipeline，以及一般 PDF 路徑。
+
+先講結論
+--------
+
+把 PDF 放進 1_收集資料/data/sources/ 不會自動開始 OCR。執行命令後，程式會依序完成：
+
+  PDF -> page PNG -> layout blocks -> image crops -> Stage2 OCR -> Stage3 整理
+      -> PageIR / quality -> TXT、TEX、questions.jsonl
+
+DSE MCQ 需要先建立專用的 layout.json，再用 --reuse-layout 執行主 OCR。
+一般 PDF 則由主 pipeline 使用 MinerU 建立一般 layout blocks。
+
+
+一、簡單流程圖
+--------------
+
+                         2_生產線/run_ocr_pipeline.py
+                                  |
+                                  v
+  1_收集資料/data/sources/<doc>.pdf -- PDF 轉成 page_001.png、page_002.png ...
+                                  |
+                 +----------------+----------------+
+                 |                                 |
+                 v                                 v
+       DSE MCQ 專用路徑                    一般 PDF 路徑
+       RapidOCR + 規則                    MinerU layout
+       一題一框、跳過封面                TEXT / FORMULA / FIGURE
+                 |                                 |
+                 +----------------+----------------+
+                                  v
+                       layout.json / LayoutBlock
+                                  |
+                                  v
+                     DynamicRouter 逐 block 裁圖
+                         |                    |
+                         v                    v
+                  TextRouter              MathRouter
+                  Qwen3-VL OCR             Formula engine
+                  (MCQ prompt)             (Qwen / GOT / UniMERNet)
+                         |
+                         v
+                   DraftAssembler
+                  把 block 結果串起來
+                         |
+                         v
+             Stage3：MCQ 預設 deterministic sanitize
+             一般文件可用 VLM polish + LaTeX 整理
+                         |
+                         v
+       content_first.py -> segmenter.py -> formula_integrity.py
+                         |
+                         v
+       TXT / TEX / PageIR / quality.json / questions.jsonl / timing
+
+
+二、DSE MCQ 路徑：一個 PDF 會經過哪些 .py
+------------------------------------------
+
+0. 輸入檔案
+
+  1_收集資料/data/sources/<doc_id>.pdf
+
+  doc_id 是 PDF 檔名去掉 .pdf 後的 safe stem，例如：
+
+  1_收集資料/data/sources/2022p2.pdf -> doc_id = 2022p2
+
+1. PDF 轉頁面圖片
+
+  主要程式：
+    2_生產線/run_ocr_pipeline.py
+    2_生產線/src/ocr_pipeline/pipeline.py::PipelineManager
+    2_生產線/src/ocr_pipeline/layout.py::LayoutAnalyzer
+
+  作用：
+    - 讀取 PDF。
+    - 以設定的 DPI，預設 200，輸出 page_001.png、page_002.png 等。
+    - 如果使用 --reuse-images，已有的 PNG 會重用。
+
+  輸出：
+    1_收集資料/data/pdf_pages/<doc_id>/page_001.png
+
+  舊的獨立工具 1_收集資料/_scripts/pdf_to_images.py 仍可單獨把 PDF render 成圖片，但主流程
+  由 LayoutAnalyzer.pdf_to_images() 處理。
+
+2. 建立 DSE MCQ 專用 layout
+
+  主要命令：
+
+    uv run python 2_生產線/_script/dse_mcq_layout_doc.py `
+      --pages-dir 1_收集資料/data/pdf_pages/<doc_id> `
+      --pdf 1_收集資料/data/sources/<doc_id>.pdf `
+      --out-dir 1_收集資料/data/pdf_pages/<doc_id> `
+      --work-dir 3.分析結果/output/dse_mcq_layout_<doc_id> `
+      --lines-dir 3.分析結果/output/dse_mcq_layout_<doc_id> `
+      --no-backup-layout
+
+  主要 .py：
+    2_生產線/_script/dse_mcq_layout_doc.py
+      批次處理頁面、執行或讀取 RapidOCR lines、輸出 overlay 和 layout。
+
+    2_生產線/src/ocr_pipeline/dse_mcq_ocr.py
+      讀取已保存的 page_XXX.lines.json，讓 layout 可重播，不必重跑 light OCR。
+
+    2_生產線/src/ocr_pipeline/dse_mcq_profile.py
+      讀取 2_生產線/config/profiles/math_cp_p2.yaml，提供題號、A-D 選項與版面規則。
+
+    2_生產線/src/ocr_pipeline/dse_mcq_region.py
+      將 RapidOCR 行標記為題號、選項或其他文字；依題號和 A-D anchors
+      找出每一題的 bbox。也處理 page-leading orphan、錯誤 Roman numeral
+      題號、左側題號 gutter，以及保護圖形和右側選項的寬 crop。
+
+    2_生產線/src/ocr_pipeline/dse_mcq_layout.py
+      將 McqRegion 轉成 LayoutBlock，並寫入 question_id metadata 和題目 crop。
+      預設跳過 PDF 第 1 頁的「考生須知／封面」；只有使用
+      --include-first-page 才會把第 1 頁納入 DSE 題目分析。
+
+    2_生產線/src/ocr_pipeline/layout_artifact.py
+      將頁面、bbox、block type、question_id 等資料寫入或讀回 layout.json。
+
+  輸出：
+    1_收集資料/data/pdf_pages/<doc_id>/layout.json
+    1_收集資料/data/pdf_pages/<doc_id>/crops/pNNN_qNNN.png
+    3.分析結果/output/dse_mcq_layout_<doc_id>/page_XXX.lines.json
+    3.分析結果/output/dse_mcq_layout_<doc_id>/page_XXX.overlay.png
+    3.分析結果/output/dse_mcq_layout_<doc_id>/summary.json
+
+  overlay 是人工檢查用圖片。應先確認題號、題幹、圖形和 A-D 都在框內，
+  再開始耗時的 VLM OCR。
+
+3. 主入口和設定載入
+
+  主要 .py：
+    2_生產線/run_ocr_pipeline.py
+      解析 PDF、--reuse-layout、--limit、--output-tag、--check-compile 等命令列參數。
+
+    2_生產線/src/ocr_pipeline/factory.py
+      讀取 2_生產線/config/ocr_pipeline.yaml，建立 layout engine、VLM、router、assembler
+      和 polisher，最後組成 PipelineManager。
+
+    2_生產線/src/ocr_pipeline/pipeline_lock.py
+      建立 single-instance lock。12 GB GPU 預設不允許兩個 OCR pipeline 同時執行。
+
+  DSE 常用命令：
+
+    uv run python 2_生產線/run_ocr_pipeline.py `
+      1_收集資料/data/sources/<doc_id>.pdf --reuse-layout --output-tag mcq
+
+  --reuse-layout 會直接讀：
+    1_收集資料/data/pdf_pages/<doc_id>/layout.json
+
+  因此不會把 DSE 專用題框改回一般 MinerU layout。
+
+4. Stage1 layout 載入和釋放模型
+
+  主要 .py：
+    2_生產線/src/ocr_pipeline/pipeline.py::PipelineManager._run_unlocked
+    2_生產線/src/ocr_pipeline/layout_artifact.py
+
+  作用：
+    - 載入既有 layout.json。
+    - 把 PNG 路徑重新對應到目前的 pages directory。
+    - 完成 Stage1 後釋放 layout engine 的 VRAM，才載入或使用 VLM。
+
+  這個順序是為了避免 RTX 4070 Super 12 GB VRAM 同時放 layout model 和 Qwen
+  而造成記憶體不足或 CUDA/Windows access violation。
+
+5. Stage2：逐題 crop OCR
+
+  主要 .py：
+    2_生產線/src/ocr_pipeline/routers.py
+      DynamicRouter 依 block type 分流。帶有 meta.question_id 的 DSE block
+      交給 TextRouter，使用 MCQ_ROUTER_PROMPT。
+
+    2_生產線/src/ocr_pipeline/engines/vlm_text.py
+      VlmTextEngine 將 crop 和 prompt 交給 VLM client。
+
+    2_生產線/src/ocr_pipeline/vlm_client.py
+      保留 local Transformers Qwen/Qwen3-VL-8B-Instruct 4-bit 路徑；使用
+      greedy generation、pixel budget、stop token 和 CUDA memory cleanup。
+
+    2_生產線/src/ocr_pipeline/prompts.py
+      保存 MCQ_ROUTER_PROMPT、一般文字、table、formula 和 polish prompts。
+      MCQ prompt 要求忠實抄錄公式，貨幣 dollar 使用 literal \\$，不可自行解題。
+
+  DSE MCQ 的規則：
+    - Stage1 metadata 的 question_id 才是題號來源。
+    - VLM 只讀一題 crop，不重新分題、不重新猜題號。
+    - Stage2 結果先保留為 block.raw_text。
+
+6. 本地 Pydantic structured 驗證，以及可選 Instructor backend
+
+  主要 .py：
+    2_生產線/src/ocr_pipeline/mcq_structured.py
+      定義 Pydantic v2 的 McqOcrResult：stem、恰好 A-D choices、可見圖中文字、
+      uncertain_tokens、warnings、requires_review，以及 deterministic render_text()。
+      parse_stage2_text() 只解析本地 Qwen 已產生的 Stage2 純文字，不會呼叫任何模型。
+
+    2_生產線/src/ocr_pipeline/vlm_client.py::build_mcq_structured_client
+      只有 2_生產線/config/ocr_pipeline.yaml 的 structured_ocr.enabled=true 時，才建立
+      OpenAI-compatible Instructor client。現況維持 false。
+
+  重要限制：
+    - Instructor 不會 patch local Transformers model.generate()。
+    - local Qwen 4-bit trunk 仍然保留。
+    - structured_ocr 預設 disabled，shadow_mode 預設 true。
+    - local_mcq_validation.enabled=true 時，本地 parser 會把 Stage2 text 交給
+      Pydantic v2 驗證，成功結果寫入 questions.jsonl 的 structured_ocr。
+    - 本地驗證失敗只記錄錯誤並保留原始 text，不會重跑 VLM。
+    - 未來的 Instructor shadow mode 才是另一條可選 backend，不是目前正式路徑。
+    - validation retry 最多 1 次。
+    - question_id 不在 VLM schema 中，由 Stage1 metadata 提供。
+
+7. Stage2 組裝
+
+  主要 .py：
+    2_生產線/src/ocr_pipeline/assemble.py::DraftAssembler
+      將每個 block.raw_text 依 page/order 串起來。DSE MCQ 會強制每題以
+      "N." 開頭，題目之間保留空行，避免 A-D 被誤拆成另一題。
+
+  輸出暫存概念：
+
+    1. 題目 crop OCR：  1. 題幹\nA. ...\nB. ...\nC. ...\nD. ...
+    2. 多題 draft：    題目 1\n\n題目 2\n\n題目 3 ...
+
+8. Stage3：DSE MCQ 預設 sanitize
+
+  主要 .py：
+    2_生產線/src/ocr_pipeline/assemble.py::FinalPolisher
+    2_生產線/src/ocr_pipeline/latex_math.py
+    2_生產線/src/ocr_pipeline/pylatex_assist.py
+
+  2_生產線/config/ocr_pipeline.yaml：
+
+    pipeline:
+      mcq_stage3: sanitize
+
+  sanitize 會：
+    - 保留 Stage2 題目文字。
+    - 移除 model junk、錯誤 wrapper 和不必要的 LaTeX 噪音。
+    - 使用 pylatexenc 協助 Unicode 到 LaTeX，保留 CJK。
+    - 不重新請 VLM 改寫 MCQ，不解題，不重新排列 A-D。
+
+  一般 PDF 可走 FinalPolisher.polish() 的 VLM content-first polish；MCQ 只有
+  明確把 mcq_stage3 改成 vlm 才會使用 MCQ_POLISH_PROMPT。這不是目前 locked 預設。
+
+9. 圖形輸出
+
+  主要 .py：
+    2_生產線/src/ocr_pipeline/figure_export.py
+
+  作用：
+    - 保留 FIGURE block 的 crop。
+    - 在 extract_figures=true 時輸出 figures/*.png。
+    - 視設定用 VLM 產生 caption，放進 PageIR。
+    - pipeline.skip_figures=true 只代表圖形不進 Stage2 draft OCR；不代表刪除圖形 crop。
+
+10. PageIR、公式完整性和 quality gate
+
+  主要 .py：
+    2_生產線/src/ocr_pipeline/content_first.py
+      將 stitched text 轉成 PageIR，輸出 linear TXT/TEX 和 pageir.json。
+
+    2_生產線/src/ocr_pipeline/segmenter.py
+      分辨 PROSE、MATH、FIGURE、MARK_NOTE；整理表格噪音、公式 delimiters、
+      orphan dollar 和 MCQ option fragments。MCQ 題幹加 A-D 會 coalesce 成一個
+      retrieval-friendly segment。
+
+    2_生產線/src/ocr_pipeline/formula_integrity.py
+      檢查數學片段的括號、frac 等完整性，寫入 integrity 和 warnings。
+
+    2_生產線/src/ocr_pipeline/quality.py
+      對 PageIR segment 做 quality report，輸出 pass/warn/fail 等結果。
+      DSE 正式 ingest 仍要另外確認 layout.json 和 questions.jsonl 都有 Q1-Q45；
+      quality.json 的 pass 不單獨代表題號覆蓋完整。
+
+11. questions.jsonl
+
+  主要程式：
+    2_生產線/src/ocr_pipeline/pipeline.py::_write_questions_jsonl
+
+  每題一行，保留向後相容的 text 欄位，並附加：
+
+    {
+      "question_id": 1,
+      "page": 2,
+      "block_id": "p002_b001",
+      "crop_path": "...",
+      "text": "1. ...",
+      "structured_ocr": null
+    }
+
+  本地 Pydantic 驗證成功時，structured_ocr 會是結構化結果；驗證失敗時為 null
+  並保留錯誤資訊。legacy text 仍是 TXT、TEX、PageIR 的正式來源。
+
+12. 最終輸出和計時
+
+  2_生產線/src/ocr_pipeline/engines/timing.py::StageTimer 會記錄 layout、route、polish、
+  figure_export、finalize 和 total 秒數。主程式也會在 console 印出 TIMING。
+
+  3.分析結果/output/<doc_id>.<tag>.* 可能包括：
+
+    .txt             人工檢查的純文字 OCR
+    .tex             LaTeX 文件
+    .pageir.json     PageIR segments、bbox、integrity、figure crop reference
+    .quality.json    quality gate 報告
+    .questions.jsonl DSE MCQ 一題一行的 backward-compatible 輸出
+    .timing.txt      若由 batch/export workflow 保存的計時結果
+    figures/         圖片 crop 和可選 caption
+    run.log          若由外部 runner 保存 stdout/stderr
+
+
+三、一般 PDF 路徑
+----------------
+
+執行：
+
+  uv run python 2_生產線/run_ocr_pipeline.py 1_收集資料/data/sources/document.pdf
+
+factory.py 依 2_生產線/config/ocr_pipeline.yaml 建立：
+
+  layout：MineruLayoutEngine（預設）
+  text：VlmTextEngine -> Qwen3-VL
+  formula：VlmFormulaEngine（可選 GOT / UniMERNet）
+  router：DynamicRouter
+  assembler：DraftAssembler
+  polisher：FinalPolisher
+
+一般 PDF 的 Stage1 會由 MinerU 找出 TEXT、FORMULA、TABLE、FIGURE blocks，
+再由 DynamicRouter 分流。一般文字/table 交給 TextRouter，公式交給 MathRouter，
+圖形視 skip_figures 設定保留 crop 或進一步 caption。
+
+一般 PDF 不使用 DSE 題號規則，也不使用 DSE 的一題一框 regioner。這條路徑不受
+DSE MCQ 專用規則影響。
+
+
+四、檢查重點和安全限制
+----------------------
+
+  1. DSE layout 先看 overlay，再啟動 Qwen VLM，避免把錯誤框送進 GPU OCR。
+  2. 12 GB GPU 不要同時執行兩個 2_生產線/run_ocr_pipeline.py。
+  3. DSE 預設跳過第 1 頁「考生須知」；要讀第 1 頁必須明確使用 --include-first-page。
+  4. N-up 預設關閉：nup.enabled=false。
+  5. Stage3 MCQ 維持 sanitize，不要把 VLM rewrite 當成預設修復方法。
+  6. 2012-2023 既有 TXT/JSONL 可能是舊版 VLM 結果；regioner 修好不等於內容已重跑。
+  7. 正式 ingest 前，人工確認 overlay、layout.json、questions.jsonl 的 Q1-Q45。
+
+
+五、一眼看懂：每個階段的輸入和輸出
+----------------------------------
+
+  Stage1  PDF / PNG
+          -> layout.json + question crops
+
+  Stage2  question crop + prompt
+          -> block.raw_text（每題 OCR 草稿）
+          -> 本地 Pydantic structured_ocr（不呼叫第二個模型）
+
+  Stage3  block.raw_text
+          -> deterministic sanitize（MCQ）或 VLM polish（一般 PDF）
+
+  Final   stitched text
+          -> PageIR + integrity + quality
+          -> .txt / .tex / .pageir.json / .questions.jsonl
+
+目前 locked 的核心原則是：Stage1 決定題框和題號，Stage2 忠實 OCR，Stage3
+不重新創作內容，最後才做 deterministic 結構化和輸出。

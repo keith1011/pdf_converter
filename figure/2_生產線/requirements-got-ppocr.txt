@@ -1,0 +1,9 @@
+# DEPRECATED: use uv dependency group `got`.
+#
+#   uv sync --group got
+#
+# On Windows, install paddlepaddle CPU separately if PP-OCR text is needed
+# (GPU paddle conflicts with torch CUDA cuDNN DLLs):
+#   uv pip install paddlepaddle==3.2.2 --index-url https://www.paddlepaddle.org.cn/packages/stable/cpu/
+#
+# Prefer a Python 3.12 env for Paddle; see findings.md (GPU smoke env).

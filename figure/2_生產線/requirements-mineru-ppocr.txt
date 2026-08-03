@@ -1,0 +1,10 @@
+# DEPRECATED for installs — use the uv dependency group instead:
+#   uv sync --group mineru
+# (also included in default-groups so plain `uv sync` / `uv run` gets MinerU).
+#
+# transformers is pinned to >=4.49,<5 in pyproject for MinerU + Qwen coexistence.
+#
+# Legacy dedicated experiment venv (optional):
+#   uv venv .venv-mineru312 --python 3.12
+#   uv pip install --python .venv-mineru312 torch torchvision --index-url https://download.pytorch.org/whl/cu126
+#   uv pip install --python .venv-mineru312 "mineru[pipeline]"

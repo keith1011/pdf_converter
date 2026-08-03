@@ -1,0 +1,602 @@
+"""Stitch-then-segment: draft text → PageIR (content-first Ship 1)."""
+
+from __future__ import annotations
+
+import re
+
+from .models import BBox, ContentSegment, IntegrityStatus, PageIR, SegmentKind
+
+_META_LINE = re.compile(r"將圖片.*轉換")
+_NUP_MARKER = re.compile(r"^<<<nup:(v\d+|zh|en|[A-Za-z0-9_\-]+)>>>$")
+# Allow \\$ (currency) inside math; do not treat it as a delimiter.
+_DOLLAR_MATH = re.compile(r"(?<!\\)\$((?:[^$\\]|\\.)+?)(?<!\\)\$")
+_HTML_BREAK = re.compile(r"<br\s*/?>", re.IGNORECASE)
+_TABLE_DIVIDER_CELL = re.compile(r":?-{3,}:?")
+_LAYOUT_ENV = re.compile(
+    r"\\(begin|end)\{(itemize|enumerate|align\*?|aligned|gather\*?|equation\*?)\}"
+)
+_ITEM_PREFIX = re.compile(r"^\\item(?:\[[^\]]*\])?\s*")
+_MARK_NOTE = re.compile(r"\d+\s*[MA](?:\s*\+\s*\d+\s*[MA])*", re.IGNORECASE)
+_MATH_RELATION = re.compile(r"=|\\(?:le|ge|ne|approx)\b")
+# Do NOT match bare \\begin — that classifies tabular/table as math and
+# content_first wraps them as $...$ (Missing $, Misplaced \\noalign).
+_TEX_MATH_HINT = re.compile(
+    r"\\(?:frac|dfrac|tfrac|feac|fraq|times|tims|sqrt|angle|triangle|sum|prod|int)\b"
+    r"|\\begin\{(?:matrix|pmatrix|bmatrix|vmatrix|Vmatrix|cases)\}"
+    # Any other TeX control word except document/table chrome
+    r"|\\(?!end\b|begin\b|hline\b|centering\b|documentclass\b|usepackage\b|"
+    r"geometry\b|item\b|caption\b|label\b|ref\b|newpage\b|noindent\b)"
+    r"[a-zA-Z]+\b"
+    r"|[\^_]"
+)
+_TAB_ENV_BEGIN = re.compile(
+    r"\\begin\{(table\*?|tabular\*?|longtable)\}(?:\[[^\]]*\])?(?:\{[^}]*\})?",
+    re.IGNORECASE,
+)
+_TAB_ENV_END = re.compile(
+    r"\\end\{(table\*?|tabular\*?|longtable)\}",
+    re.IGNORECASE,
+)
+_HLINE = re.compile(r"\\hline\b")
+_EMPTY_DOLLAR_PAIR = re.compile(r"\$[ \t]*\$")  # same-line only; do not cross \n
+_TABULAR_CHROME_MATH = re.compile(
+    r"^\\(?:begin|end)\{(?:table\*?|tabular\*?|longtable)\}"
+    r"|^\\hline$"
+    r"|^\|?[cclr@\{\}\s\*]*\|?$"
+    r"|^\$+$",
+    re.IGNORECASE,
+)
+_ROW_BREAK = re.compile(r"\\\\\s*")
+_MD_FENCE = re.compile(r"```(?:\w+)?")
+_CENTERING = re.compile(r"\\centering\b")
+_BRACKET_DISPLAY = re.compile(r"\\\[(.+?)\\\]", re.DOTALL)
+_PAREN_INLINE = re.compile(r"\\\((.+?)\\\)", re.DOTALL)
+_CJK_CHAR = re.compile(r"[\u4e00-\u9fff]")
+_CJK_OR_PUNCT = re.compile(r"^[\u4e00-\u9fff\s，。、：；！？「」『』（）,.．；：、]+$")
+_CASES_ENV = re.compile(
+    r"\\begin\{cases\}.*?\\end\{cases\}",
+    re.DOTALL | re.IGNORECASE,
+)
+# Marking-scheme OCR junk: \frac{正方形性質}{-} / \frac{-}{-}
+_JUNK_FRAC_CJK = re.compile(
+    r"\\(?:frac|dfrac|tfrac)\{[^}]*[\u4e00-\u9fff][^}]*\}\{[^}]*\}"
+)
+_JUNK_FRAC_DASH = re.compile(r"\\frac\{-\}\{-\}")
+_TEXT_CJK = re.compile(r"\\text\{([^}]*[\u4e00-\u9fff][^}]*)\}")
+_TEXT_PUNCT_ONLY = re.compile(r"\\text\{[\s，。、：；！？「」『』（）,.\-–—]*\}")
+_LEADING_CJK_RUN = re.compile(r"^([\u4e00-\u9fff\s，。、：；！？「」『』（）,.．]+)")
+_OPTION_ONLY = re.compile(r"^[A-Da-d][\.．、)]\s*$")
+_PUNCT_ONLY = re.compile(r"^[。．.、，,；;：:！!？?\s]+$")
+_OPTION_START = re.compile(r"^[A-Da-d][\.．、)]\s*")
+_QNUM_ONLY = re.compile(r"^\d{1,2}[\.．]\s*$")
+# Stem opener ``4.`` / ``12．`` — not decimals like ``0.002``.
+_QNUM_START = re.compile(r"^(\d{1,2})[\.．](?!\d)")
+# Inline A–D that should start a new line (MCQ options glued on one line).
+_INLINE_OPTION = re.compile(r"(?<!\n)[ \t]+([A-D][\.．])")
+# Leading ``$4. stem$`` (may be followed by more lines).
+_WRAPPED_QNUM_MATH = re.compile(
+    r"^\$(\d{1,2}[\.．])\s*(.+?)\$",
+    re.DOTALL,
+)
+
+
+def _looks_like_math(text: str) -> bool:
+    if _TABULAR_CHROME_MATH.fullmatch(text.strip()):
+        return False
+    if _CJK_OR_PUNCT.fullmatch(text.strip()):
+        return False
+    return bool(_TEX_MATH_HINT.search(text) or _MATH_RELATION.search(text))
+
+
+def _clean_math_body(text: str) -> str:
+    """Drop stray $ / \\[ \\] \\( \\); keep \\$ currency."""
+    text = text.replace(r"\[", " ").replace(r"\]", " ")
+    text = text.replace(r"\(", " ").replace(r"\)", " ")
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        if text[i] == "\\" and i + 1 < len(text) and text[i + 1] == "$":
+            out.append("\\$")
+            i += 2
+            continue
+        if text[i] == "$":
+            i += 1
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out).strip()
+
+
+def _strip_marking_junk_commands(text: str) -> str:
+    """Remove OCR junk fracs; unwrap \\text{CJK} to plain prose."""
+    text = _JUNK_FRAC_CJK.sub("", text)
+    text = _JUNK_FRAC_DASH.sub("", text)
+    text = _TEXT_PUNCT_ONLY.sub(" ", text)
+    text = _TEXT_CJK.sub(r"\1", text)
+    text = re.sub(r"\\caption(?:\[[^\]]*\])?\{[^}]*\}", "", text, flags=re.IGNORECASE)
+    return text.strip()
+
+
+def _first_cjk_outside_braces(text: str) -> int | None:
+    """Index of first CJK character not inside {...} (so we don't split \\frac)."""
+    depth = 0
+    i = 0
+    while i < len(text):
+        c = text[i]
+        if c == "\\" and i + 1 < len(text):
+            i += 2
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth = max(0, depth - 1)
+        elif depth == 0 and _CJK_CHAR.match(c):
+            return i
+        i += 1
+    return None
+
+
+def _emit_tail_after_cjk(after: str) -> list[tuple[SegmentKind, str]]:
+    """Peel leading CJK, then keep TeX-command tails as math."""
+    after = _strip_marking_junk_commands(after)
+    if not after:
+        return []
+    parts: list[tuple[SegmentKind, str]] = []
+    lead = _LEADING_CJK_RUN.match(after)
+    if lead:
+        prose = lead.group(1).strip()
+        if prose:
+            parts.append((SegmentKind.PROSE, prose))
+        after = after[lead.end() :].strip()
+    if not after:
+        return parts
+    if _looks_like_math(after) or re.search(r"\\[a-zA-Z]+\b", after):
+        # Still has CJK inside braces of math — keep as math only if no free CJK
+        if _first_cjk_outside_braces(after) is None:
+            parts.append((SegmentKind.MATH, after))
+        else:
+            parts.append((SegmentKind.PROSE, after))
+    else:
+        parts.append((SegmentKind.PROSE, after))
+    return parts
+
+
+def _partition_math_and_prose(text: str) -> list[tuple[SegmentKind, str]]:
+    """Split mixed 'math + Chinese' blobs so CJK is never inside $...$."""
+    text = _strip_marking_junk_commands(_clean_math_body(text))
+    if not text:
+        return []
+
+    # Peel MCQ stem opener ``4. 0.002=`` so ``4.`` is never classified as math.
+    m_op = _QNUM_START.match(text)
+    if m_op and not _QNUM_ONLY.match(text.strip()):
+        opener = text[: m_op.end()].strip()
+        rest = text[m_op.end() :].strip()
+        if rest:
+            return [(SegmentKind.PROSE, opener), *_partition_math_and_prose(rest)]
+
+    # Any remaining CJK inside TeX args → treat carefully via tail emit
+    if _CJK_CHAR.search(text) and (
+        r"\frac" in text or r"\dfrac" in text or r"\tfrac" in text
+    ):
+        return [(SegmentKind.PROSE, text)]
+
+    idx = _first_cjk_outside_braces(text)
+    if idx is None:
+        kind = SegmentKind.MATH if _looks_like_math(text) else SegmentKind.PROSE
+        return [(kind, text)]
+    before = text[:idx].strip()
+    after = text[idx:].strip()
+    parts: list[tuple[SegmentKind, str]] = []
+    if before:
+        kind = SegmentKind.MATH if _looks_like_math(before) else SegmentKind.PROSE
+        parts.append((kind, before))
+    parts.extend(_emit_tail_after_cjk(after))
+    return parts
+
+
+def normalize_mcq_block_text(text: str) -> str:
+    """
+    Post-merge cleanup for one MCQ question block.
+
+    - Unwrap ``$N. stem$`` → ``N.\\n$stem$``
+    - Put stem opener on its own line when followed by body
+    - Force ``A./B./C./D.`` onto separate lines when glued mid-line
+    """
+    text = (text or "").strip()
+    if not text:
+        return text
+
+    m_wrap = _WRAPPED_QNUM_MATH.match(text)
+    if m_wrap:
+        opener = m_wrap.group(1)
+        body = m_wrap.group(2).strip()
+        tail = text[m_wrap.end() :]
+        text = f"{opener}\n${body}${tail}"
+
+    m_op = _QNUM_START.match(text)
+    if m_op:
+        opener = text[: m_op.end()].strip()
+        rest = text[m_op.end() :].lstrip(" \t")
+        if rest and not rest.startswith("\n"):
+            text = f"{opener}\n{rest}"
+
+    text = _INLINE_OPTION.sub(r"\n\1", text)
+    # Collapse accidental blank lines inside options, keep single newlines.
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _normalize_math_delimiters(text: str) -> str:
+    """Content-first uses single $...$; collapse \\[ \\] / \\( \\) / $$."""
+    text = _BRACKET_DISPLAY.sub(lambda m: f"${m.group(1).strip()}$", text)
+    text = _PAREN_INLINE.sub(lambda m: f"${m.group(1).strip()}$", text)
+    # Flatten cases env to inline (avoid \\ begin/end inside $)
+    text = _CASES_ENV.sub(
+        lambda m: "$" + m.group(0).replace(r"\\", " ").strip() + "$",
+        text,
+    )
+    return text.replace("$$", "$")
+
+
+def _explode_tabular_chrome(text: str) -> str:
+    """Turn LaTeX table chrome into newlines so cells can be linearized."""
+    text = _TAB_ENV_BEGIN.sub("\n", text)
+    text = _TAB_ENV_END.sub("\n", text)
+    text = _HLINE.sub("\n", text)
+    text = _CENTERING.sub("\n", text)
+    text = _MD_FENCE.sub("\n", text)
+    # Content-first: collapse display $$ before pair extraction
+    text = _normalize_math_delimiters(text)
+    # Same-line empty $ $ only (never eat closing+opening across lines)
+    text = _EMPTY_DOLLAR_PAIR.sub("\n", text)
+    return text
+
+
+def _split_ampersand_rows(chunk: str) -> list[str]:
+    """Split residual tabular rows (`\\\\`) and cells (`&`) into lines."""
+    if "&" not in chunk and r"\\" not in chunk:
+        return [chunk]
+    if "&" not in chunk:
+        # Lone \\\\ without &: keep as-is (math may use \\\\ only inside envs
+        # already stripped). Still flatten trailing row breaks.
+        cleaned = _ROW_BREAK.sub("\n", chunk)
+        return [cleaned] if "\n" not in cleaned else cleaned.splitlines()
+
+    rows = _ROW_BREAK.split(chunk)
+    cells: list[str] = []
+    for row in rows:
+        row = row.strip()
+        if not row:
+            continue
+        if "&" in row:
+            cells.extend(cell.strip() for cell in row.split("&") if cell.strip())
+        else:
+            cells.append(row)
+    return cells
+
+
+def _linearized_lines(stitched_text: str) -> list[str]:
+    """Remove Markdown/LaTeX table chrome and turn cells/HTML breaks into lines."""
+    text = _explode_tabular_chrome(stitched_text)
+    lines: list[str] = []
+    active_env: str | None = None
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        env_match = _LAYOUT_ENV.fullmatch(stripped)
+        if env_match:
+            active_env = env_match.group(2) if env_match.group(1) == "begin" else None
+            continue
+
+        if stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 3:
+            cells = [cell.strip() for cell in stripped[1:-1].split("|")]
+            if cells and all(
+                not cell or _TABLE_DIVIDER_CELL.fullmatch(cell) for cell in cells
+            ):
+                continue
+            chunks = cells
+        else:
+            chunks = [raw_line]
+
+        for chunk in chunks:
+            for amp_piece in _split_ampersand_rows(chunk):
+                for piece in _HTML_BREAK.split(amp_piece):
+                    piece = _ITEM_PREFIX.sub("", piece.strip())
+                    if active_env and not active_env.startswith(("itemize", "enumerate")):
+                        piece = piece.lstrip("&").rstrip()
+                        piece = re.sub(r"\\\\\s*$", "", piece).rstrip()
+                    if piece:
+                        lines.append(piece)
+    return lines
+
+
+def _is_tabular_chrome_body(text: str) -> bool:
+    t = text.strip()
+    if not t:
+        return True
+    if _TABULAR_CHROME_MATH.fullmatch(t):
+        return True
+    if _TAB_ENV_BEGIN.search(t) or _TAB_ENV_END.search(t) or _HLINE.search(t):
+        return True
+    # Model sometimes emits a mid-body \end{document} / empty \caption
+    if re.fullmatch(r"\\(?:begin|end)\{document\}", t, flags=re.IGNORECASE):
+        return True
+    return bool(
+        re.fullmatch(r"\\caption(?:\[[^\]]*\])?\{[^}]*\}", t, flags=re.IGNORECASE)
+    )
+
+
+def _strip_orphan_dollars(text: str) -> str:
+    """Remove stray wrapping $ so render does not emit $$...$."""
+    t = text.strip()
+    while t.startswith("$"):
+        t = t[1:].lstrip()
+    while t.endswith("$") and not t.endswith(r"\$"):
+        t = t[:-1].rstrip()
+    return t.strip()
+
+
+def _append_partitions(
+    parts: list[ContentSegment],
+    text: str,
+    *,
+    source_id: str,
+    page_bbox: BBox,
+    version_id: str | None = None,
+) -> None:
+    for kind, body in _partition_math_and_prose(text):
+        if not body or _is_tabular_chrome_body(body):
+            continue
+        parts.append(
+            ContentSegment(
+                kind=kind,
+                text=body,
+                source_block_id=source_id,
+                bbox=page_bbox,
+                integrity=IntegrityStatus.OK,
+                version_id=version_id,
+            )
+        )
+
+
+def coalesce_mcq_segments(segments: list[ContentSegment]) -> list[ContentSegment]:
+    """
+    Merge atomized MCQ fragments into retrieval-useful PageIR segments.
+
+    1) Glue bare ``A.`` + value / trailing punct (legacy).
+    2) On MCQ-like pages, merge each question (stem + A–D) into **one prose**
+       segment so quality gate ``pct_le3`` / ``pct_ge20`` can pass.
+    """
+    if not segments:
+        return segments
+    glued = _coalesce_option_fragments(segments)
+    if _looks_like_mcq_page(glued):
+        return _merge_mcq_question_blocks(glued)
+    return glued
+
+
+def _looks_like_mcq_page(segments: list[ContentSegment]) -> bool:
+    openers = 0
+    options = 0
+    for seg in segments:
+        t = seg.text.strip()
+        if not t:
+            continue
+        if _QNUM_ONLY.match(t) or _QNUM_START.match(t):
+            openers += 1
+        if _OPTION_ONLY.match(t) or _OPTION_START.match(t):
+            options += 1
+    return openers >= 2 or (openers >= 1 and options >= 2)
+
+
+def _seg_join_text(seg: ContentSegment) -> str:
+    t = seg.text.strip()
+    if not t:
+        return ""
+    if seg.kind is SegmentKind.MATH and not t.startswith("$"):
+        return f"${t}$"
+    return t
+
+
+def _is_question_opener_seg(seg: ContentSegment) -> bool:
+    t = seg.text.strip()
+    return bool(_QNUM_ONLY.match(t) or _QNUM_START.match(t))
+
+
+def _merge_mcq_question_blocks(segments: list[ContentSegment]) -> list[ContentSegment]:
+    """Collapse stem crumbs + options into one PROSE segment per ``N.`` opener."""
+    out: list[ContentSegment] = []
+    buf: list[ContentSegment] = []
+
+    def flush() -> None:
+        nonlocal buf
+        if not buf:
+            return
+        if len(buf) == 1 and buf[0].kind is SegmentKind.FIGURE:
+            out.append(buf[0])
+            buf = []
+            return
+        lines = [_seg_join_text(s) for s in buf]
+        lines = [ln for ln in lines if ln]
+        text = normalize_mcq_block_text("\n".join(lines))
+        head = buf[0]
+        out.append(
+            ContentSegment(
+                kind=SegmentKind.PROSE,
+                text=text,
+                source_block_id=head.source_block_id,
+                bbox=head.bbox,
+                integrity=head.integrity,
+                crop_relpath=head.crop_relpath,
+                version_id=head.version_id,
+            )
+        )
+        buf = []
+
+    for seg in segments:
+        if seg.kind is SegmentKind.FIGURE:
+            flush()
+            out.append(seg)
+            continue
+        if seg.kind is SegmentKind.MARK_NOTE:
+            flush()
+            out.append(seg)
+            continue
+        if _is_question_opener_seg(seg) and buf:
+            flush()
+        buf.append(seg)
+    flush()
+    return out
+
+
+def _coalesce_option_fragments(segments: list[ContentSegment]) -> list[ContentSegment]:
+    """Merge atomized MCQ option fragments (``A.`` + value + punct)."""
+    if not segments:
+        return segments
+    out: list[ContentSegment] = []
+    for seg in segments:
+        if not out:
+            out.append(seg)
+            continue
+        prev = out[-1]
+        if prev.kind in {SegmentKind.FIGURE, SegmentKind.MARK_NOTE} or seg.kind is SegmentKind.FIGURE:
+            out.append(seg)
+            continue
+        if _PUNCT_ONLY.match(seg.text):
+            out[-1] = ContentSegment(
+                kind=prev.kind if prev.kind is not SegmentKind.MATH else SegmentKind.PROSE,
+                text=prev.text.rstrip() + seg.text.strip(),
+                source_block_id=prev.source_block_id,
+                bbox=prev.bbox,
+                integrity=prev.integrity,
+                crop_relpath=prev.crop_relpath,
+                version_id=prev.version_id,
+            )
+            continue
+        if _OPTION_ONLY.match(prev.text) and seg.kind in {
+            SegmentKind.PROSE,
+            SegmentKind.MATH,
+        }:
+            body = seg.text.strip()
+            if seg.kind is SegmentKind.MATH and not body.startswith("$"):
+                body = f"${body}$"
+            out[-1] = ContentSegment(
+                kind=SegmentKind.PROSE,
+                text=f"{prev.text.rstrip()} {body}".strip(),
+                source_block_id=prev.source_block_id,
+                bbox=prev.bbox,
+                integrity=prev.integrity,
+                crop_relpath=prev.crop_relpath,
+                version_id=prev.version_id,
+            )
+            continue
+        if (
+            _OPTION_START.match(prev.text)
+            and not _OPTION_ONLY.match(seg.text)
+            and not _QNUM_START.match(seg.text)
+            and seg.kind in {SegmentKind.PROSE, SegmentKind.MATH}
+            and len(seg.text) <= 48
+            and len(prev.text) <= 120
+        ):
+            body = seg.text.strip()
+            if seg.kind is SegmentKind.MATH and not body.startswith("$"):
+                body = f"${body}$"
+            joiner = "" if _PUNCT_ONLY.match(body) else " "
+            out[-1] = ContentSegment(
+                kind=SegmentKind.PROSE,
+                text=f"{prev.text.rstrip()}{joiner}{body}".strip(),
+                source_block_id=prev.source_block_id,
+                bbox=prev.bbox,
+                integrity=prev.integrity,
+                crop_relpath=prev.crop_relpath,
+                version_id=prev.version_id,
+            )
+            continue
+        out.append(seg)
+    return out
+
+
+def segment_stitched_page(
+    *,
+    page_index: int,
+    stitched_text: str,
+    page_bbox: BBox,
+) -> PageIR:
+    """
+    Segment a stitched page draft into PageIR.
+
+    Ship 1 (3B/6A): all segments share `p{N}_stitched` and the full-page bbox.
+    """
+    source_id = f"p{page_index}_stitched"
+    segments: list[ContentSegment] = []
+    current_version: str | None = None
+
+    for raw_line in _linearized_lines(stitched_text):
+        line = raw_line.strip()
+        if not line:
+            continue
+        m_nup = _NUP_MARKER.fullmatch(line)
+        if m_nup:
+            current_version = m_nup.group(1)
+            continue
+        if _META_LINE.search(line):
+            continue
+        if _MARK_NOTE.fullmatch(line):
+            segments.append(
+                ContentSegment(
+                    kind=SegmentKind.MARK_NOTE,
+                    text=line,
+                    source_block_id=source_id,
+                    bbox=page_bbox,
+                    integrity=IntegrityStatus.OK,
+                    version_id=current_version,
+                )
+            )
+            continue
+
+        parts: list[ContentSegment] = []
+        pos = 0
+        for m in _DOLLAR_MATH.finditer(line):
+            before = line[pos : m.start()].strip()
+            if before:
+                _append_partitions(
+                    parts,
+                    before,
+                    source_id=source_id,
+                    page_bbox=page_bbox,
+                    version_id=current_version,
+                )
+            math_body = _strip_orphan_dollars(m.group(1))
+            if math_body and not _is_tabular_chrome_body(math_body):
+                _append_partitions(
+                    parts,
+                    math_body,
+                    source_id=source_id,
+                    page_bbox=page_bbox,
+                    version_id=current_version,
+                )
+            pos = m.end()
+        after = _strip_orphan_dollars(line[pos:])
+        if after and not _is_tabular_chrome_body(after):
+            if pos == 0:
+                parts = []
+            _append_partitions(
+                parts,
+                after,
+                source_id=source_id,
+                page_bbox=page_bbox,
+                version_id=current_version,
+            )
+        if not parts and line:
+            cleaned = _strip_orphan_dollars(line)
+            if cleaned and not _is_tabular_chrome_body(cleaned):
+                _append_partitions(
+                    parts,
+                    cleaned,
+                    source_id=source_id,
+                    page_bbox=page_bbox,
+                    version_id=current_version,
+                )
+        segments.extend(parts)
+
+    return PageIR(page_index=page_index, segments=coalesce_mcq_segments(segments))

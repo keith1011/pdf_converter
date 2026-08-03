@@ -1,0 +1,125 @@
+# P-ocr feedstock OCR — uv / pyproject is the install source of truth.
+# Trunk OCR: MinerU layout + Qwen text/formula (default-groups include `mineru`).
+# transformers pinned <5 for MinerU + Qwen coexistence.
+# Windows torch CUDA uses the pytorch-cu126 index below.
+# Optional Surya still: `uv pip install surya-ocr --no-deps` (Pillow pin issues).
+# GOT stack: `uv sync --group got` (plus paddle CPU as needed).
+
+[project]
+name = "pdf-scaner"
+version = "0.0.0"
+description = "P-ocr feedstock OCR pipeline (local tooling metadata)"
+requires-python = ">=3.12,<3.13"
+readme = "README.md"
+dependencies = [
+    "accelerate>=0.33.0",
+    "bitsandbytes>=0.43.0",
+    "filetype>=1.2",
+    "instructor>=1.15.4",
+    "openai>=2.48.0",
+    "opencv-python-headless>=4.8",
+    "pillow>=10.0.0",
+    "platformdirs>=4.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "pylatexenc>=2.10",
+    "pymupdf>=1.28.0",
+    "pypdfium2>=4.30",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "torch>=2.13.0",
+    "torchvision>=0.19.0",
+    "transformers>=4.49,<5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["2_生產線/src/ocr_pipeline", "2_生產線/src/figure_pipeline"]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[dependency-groups]
+dev = [{ include-group = "lint" }, { include-group = "test" }]
+got = [
+    "doclayout-yolo>=0.0.4",
+    "paddleocr>=2.10.0",
+]
+lint = [
+    "ruff>=0.11",
+    "ty",
+]
+mineru = [
+    "mineru[pipeline]>=3.4.4",
+]
+test = [
+    "pytest>=8.0",
+    "pytest-cov",
+]
+
+[tool.uv]
+# Trunk layout needs mineru; keep it in the default sync for OCR runs.
+default-groups = ["dev", "mineru"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["2_生產線/src", "2_生產線/tests"]
+extend-exclude = [
+  ".venv",
+  ".venv-engines312",
+  ".venv-mineru312",
+  "3.分析結果/output",
+  "1_收集資料/data",
+  "3.分析結果/qdrant_storage",
+  "3.分析結果/_opencode_export",
+  "2_生產線/homelab/ingest/__pycache__",
+]
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "W",
+  "F",
+  "I",
+  "UP",
+  "B",
+  "SIM",
+]
+ignore = [
+  "T20",
+  "COM812",
+  "ISC001",
+  "E501",
+  "UP042",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"2_生產線/tests/**" = ["S101"]
+"2_生產線/run_ocr_pipeline.py" = ["E402"]
+"2_生產線/arrange_only.py" = ["E402"]
+"2_生產線/homelab/**" = ["E402", "T20"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.pytest.ini_options]
+pythonpath = ["2_生產線/src"]
+testpaths = ["2_生產線/tests"]
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.terminal]
+error-on-warning = false

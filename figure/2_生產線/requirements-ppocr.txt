@@ -1,0 +1,2 @@
+# DEPRECATED: use `uv sync --group got` (includes paddleocr).
+# Install paddlepaddle wheel separately for your CUDA/CPU choice — see requirements-got-ppocr.txt.

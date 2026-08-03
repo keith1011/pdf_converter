@@ -1,0 +1,12 @@
+{"id": "ok_simple", "body": "x=1", "expect_status": "ok"}
+{"id": "ok_nested_frac", "body": "\\frac{a}{\\frac{b}{c}}", "expect_status": "ok"}
+{"id": "ok_frac_text", "body": "\\frac{a}{b}\\text{cm}", "expect_status": "ok"}
+{"id": "ok_times", "body": "2\\times 3", "expect_status": "ok"}
+{"id": "repaired_feac", "body": "\\feac{1}{6}", "expect_status": "repaired", "expect_body": "\\frac{1}{6}"}
+{"id": "repaired_fraq", "body": "\\fraq{a}{b}", "expect_status": "repaired", "expect_body": "\\frac{a}{b}"}
+{"id": "repaired_tims", "body": "a\\tims b", "expect_status": "repaired", "expect_body": "a\\times b"}
+{"id": "fail_bs_in_frac", "body": "\\frac{1}{2\\times 3}\\\\x", "expect_status": "fail"}
+{"id": "fail_bs_near_frac", "body": "\\frac{a}{b}\\\\", "expect_status": "fail"}
+{"id": "fail_cjk_fen", "body": "x=1分", "expect_status": "fail"}
+{"id": "fail_bare_1M", "body": "1M", "expect_status": "fail"}
+{"id": "fail_bare_1A", "body": "1A", "expect_status": "fail"}

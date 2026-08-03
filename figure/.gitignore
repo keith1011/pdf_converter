@@ -1,0 +1,34 @@
+# Local / runtime
+.venv/
+.venv-engines312/
+.venv-mineru312/
+.venv-arabic-ocr/
+venv*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.ty/
+.cache/
+huggingface/
+*.log
+.DS_Store
+Thumbs.db
+
+# Data & OCR artifacts
+1_收集資料/data/pdf_pages/
+1_收集資料/data/sources/*
+!1_收集資料/data/sources/.gitkeep
+!1_收集資料/data/sources/qa_template.tex
+1_收集資料/data/draft.jsonl
+1_收集資料/data/rejected.jsonl
+1_收集資料/data/train.jsonl
+3.分析結果/output/*
+!3.分析結果/output/.gitkeep
+3.分析結果/qdrant_storage/
+*.pdf
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
