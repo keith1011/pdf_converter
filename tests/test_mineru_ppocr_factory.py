@@ -6,7 +6,7 @@ from ocr_pipeline.engines.unimernet_formula import UnimernetFormulaEngine
 from ocr_pipeline.engines.vlm_formula import VlmFormulaEngine
 from ocr_pipeline.engines.vlm_text import VlmTextEngine
 from ocr_pipeline.factory import build_default_pipeline
-from ocr_pipeline.vlm_client import Qwen25VlClient
+from ocr_pipeline.vlm_client import QwenVlClient
 
 
 def test_factory_wires_trunk_mineru_qwen_qwen_without_loading_weights(tmp_path):
@@ -35,7 +35,7 @@ def test_factory_wires_trunk_mineru_qwen_qwen_without_loading_weights(tmp_path):
     assert isinstance(pipeline.layout_engine, MineruLayoutEngine)
     assert isinstance(pipeline.router.text_router.text_engine, VlmTextEngine)
     assert isinstance(pipeline.router.math_router.formula_engine, VlmFormulaEngine)
-    assert isinstance(pipeline.polisher.vlm, Qwen25VlClient)
+    assert isinstance(pipeline.polisher.vlm, QwenVlClient)
 
 
 def test_factory_default_engines_match_trunk_when_omitted(tmp_path):

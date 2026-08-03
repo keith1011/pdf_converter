@@ -3,12 +3,56 @@
 ## Goal
 PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--check-compile` PDF；教師 ≤10 分鐘手改後可 reuse。
 
+## Current debugging — 2026-07-29
+
+- [x] 對照 `error.txt`、跨年 `summary.json`、affected pages 的 RapidOCR lines。
+- [x] 輸出 14 張缺題頁 overlay 到 `output/missing_question_overlays/`。
+- [x] TDD RED：頁首 orphan、false qid jump、graph incomplete、literal currency 共 4 個預期失敗。
+- [x] 最小修復 regioner 與 `MCQ_ROUTER_PROMPT`。
+- [x] 用既有 lines 重建 layout，驗證 2012–2023 每年 Q1–Q45。
+- [x] focused/full tests + Ruff + ty + modern-python review。
+- [ ] 使用前景 sequential VLM rerun 重新產生 txt/jsonl；先保留給使用者檢查 fixed overlays。
+
+## Instructor structured Stage2 — 2026-07-29
+
+- [x] Confirm direct Transformers limitation; preserve local Qwen3-VL 4-bit.
+- [x] Add strict Pydantic v2 `McqOcrResult` and deterministic `render_text()`.
+- [x] Add optional OpenAI-compatible `from_provider` backend, max one retry.
+- [x] Add MCQ-only shadow routing; general PDF and Stage1 remain unchanged.
+- [x] Keep legacy JSONL `text`; add nullable `structured_ocr`.
+- [x] Add Q1--Q45 coverage report/tests.
+- [x] Verify 14 new tests, 40 focused tests, 262 full tests, Ruff, and ty.
+
+### Errors
+
+- `uv run pytest ...`：Windows uv trampoline 無法 canonicalize script path；改用
+  `uv run python -m pytest ...`，成功得到 4 個預期 RED failures。
+- 2026-07-29 orphan top-bound rebuild：2020 layout/summary 完整寫出後，Python
+  process exit `-1073741819`（Windows access violation）；未重試相同命令，
+  改為驗證已寫 JSON，2021 另行前景重建。
+
 ## Current Phase
-**N-up dual-layout** — classifier green; `nup-v2` full OCR **exit 0** (~802s) after EOS harden.
-- Spec: `docs/superpowers/specs/2026-07-25-nup-classifier-crop-design.md`
-- Plan: `docs/superpowers/plans/2026-07-25-nup-classifier-crop.md` (Tasks 1–7 code done)
-- Trunk still: MinerU + Qwen (`engines.layout=mineru`); `nup.enabled: true` in config
-- Artifacts: `output/2014-DSE-MATH-CP-2.nup-v2.*`
+**DSE Paper2 MCQ** — Stage2 jsonl ABCD 45/45; Stage3 sanitize; **PageIR question-block merge → quality pass** on 2015p2.mcq.
+- Next: optional full pipeline re-run to confirm end-to-end; or teacher edit / compile check.
+- Spec/plan: `docs/superpowers/specs|plans/2026-07-26-dse-paper2-mcq-region*`
+- Layout: `data/pdf_pages/2015p2/layout.json` (qids 1–45)
+
+### Grill locks (2026-07-26, confirmed)
+| Topic | Choice |
+|-------|--------|
+| Layout success ideal | **1 MCQ = 1 box** (stem + A–D); symbol/option shreds = fail |
+| Approach | **DSE Paper2 專門題區偵測／規則** — not swap general DocLayout packages |
+| Pipeline hook | **A**: 影像／輕量行偵測 → 題 ROI → 每題一框給 VLM（Paper2 繞過／弱化 MinerU 碎框） |
+| Boundary signals | **B**: 題號開題 + **A–D 選項錨點**收束（防題內 `1.`／純數字誤切） |
+| Subject scope v1 | **C**: MATH CP Paper2 only to validate; rules as **extensible subject profiles** |
+| Dual-column (within page) | **C**: v1 單欄；雙欄偵測作 profile 開關、**預設關** |
+| Anchor OCR host | **A**: **B** 輕量 OCR（PP-OCR／行偵測）→ 題 ROI + `layout.json`；**A** 只 VLM |
+| Figures in MCQ | **A**: **圖併進該題大框**（stem+圖+A–D 仍 1 框／1 次 VLM） |
+| v1 success metric | **C**: 先 **框對**（題數≈真題、多數含 stem+A–D）；quality pass 下階段 KPI |
+| Scope (near-term) | **DSE 選擇題 Paper 2** first (not Paper1 / marking scheme) |
+| Dual-column / N-up | Do not solve; keep `nup.enabled: false`; user flattens |
+| Formal ingest | Hard **quality pass** only |
+| Qdrant vs AIbuliding | Similar-question search while writing solutions; not train.jsonl |
 
 ## Routing (locked)
 - Always: planning-with-files (`task_plan.md` / `findings.md` / `progress.md`)
@@ -20,7 +64,7 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 |------|----------|
 | GPU | RTX 4070 Super **12GB** |
 | Python | **3.12** (`.python-version`; main `.venv` via uv). Do not use 3.14 for this repo. |
-| Default VLM | **Qwen2.5-VL-7B-Instruct 4bit** |
+| Default VLM | **Qwen3-VL-8B-Instruct 4bit** (was Qwen2.5-VL-7B) |
 | **Trunk stack** | **MinerU layout + Qwen text + Qwen formula** (locked 2026-07-24) |
 | Formula knives | got / unimernet opt-in only |
 | Decode | **greedy only** (`do_sample=False`) — sampling → CUDA multinomial assert; pass `eos_token_id`/`pad_token_id`; scrub model `generation_config` sampling flags |
@@ -200,6 +244,15 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | `skip_figures` wired | DynamicRouter honors `pipeline.skip_figures`; false → text/VLM OCR on FIGURE |
 | **N-up = classifier + fixed midline/2×2** (2026-07-25) | Simplest pre-MinerU gate; XY-Cut++ deferred; uncertain → whole-page fallback |
 | N-up scope 2+4 only; auto-detect; semantic labels best-effort | Brainstorm locked; see design spec |
+| **Ideal layout = 1題1框** (DSE MCQ) | User 2026-07-26; ≤5 stem+options only as temporary accept bar if needed |
+| **DSE Paper2 專門題區規則** (not generic layout bakeoff) | User 2026-07-26; Paper2 MCQ first |
+| Paper2 hook = **影像→題 ROI→VLM** (not MinerU-then-merge) | User 2026-07-26 chose A |
+| Boundary = **題號 + A–D 錨點** (not gap-only / number-only) | User 2026-07-26; math papers have many `1.` inside stems |
+| Subject v1 = **MATH CP P2**; profiles extensible | User 2026-07-26 chose C |
+| Dual-column within page = off by default (profile switch) | User 2026-07-26 chose C |
+| Anchor OCR on **B** → `layout.json`; VLM on **A** | User 2026-07-26 chose A |
+| Figures merge into question ROI (still 1 box) | User 2026-07-26 chose A |
+| v1 KPI = box correctness first; quality later | User 2026-07-26 chose C |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -210,10 +263,20 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 | Stage3 OOM after Surya v2 success | 1 | Call manager.stop (insufficient alone) |
 | Stage3 OOM (same) | 2 | `docker stop surya-vllm-*` + GPU headroom wait in `release()` |
 | Dual `run_ocr_pipeline` PIDs during monitor | note | Avoid concurrent runs on 12GB |
+| Direct `.venv` Python replay denied by uv trampoline | 1 | Recorded; used project-standard `uv run python` successfully |
+| Sandbox CIM process inspection denied | 1 | Retried read-only inspection with approved elevation; no OCR process active |
+| Instructor version check: default uv cache path conflict (`os error 183`) | 1 | Use a workspace-local `UV_CACHE_DIR` |
+| Instructor RED tests: sandbox denied Python interpreter query (`os error 5`) | 1 | Rerun the same focused test command with approved elevation |
+| Instructor changed-file Ruff: pre-existing `SIM105` in `vlm_client.py` | 1 | Replaced `try/except/pass` with `contextlib.suppress`; behavior unchanged |
 | N-up classifier missed 2014 (white-valley only) | 1 | Add dark-spine + landscape→2_lr; threshold 0.70 |
 | `.venv-mineru312` missing bitsandbytes | 1 | Use `uv run` (default-groups has mineru+bnb) for full OCR |
 
 ## Next Action
-1. Optional GPU smoke: 2014 dual pages with `nup.enabled=true`; confirm `nup/*.json` + no L↔R zigzag
-2. Commit N-up package when user asks
-3. Homelab Wave 2 / ColPali / Ship 2 overlay — **closed** until explicitly requested
+1. Spot-check overlays in `output/dse_mcq_layout_2015p2/` (esp. p3/p6/p9/p11/p13)
+2. Optionally run same layout pipeline on 2012–2016p2
+3. Reuse RapidOCR line artifacts; then A-side `--reuse-layout` VLM after layout QA
+4. Quality-gate branch: push/PR when user asks; N-up stays disabled
+
+### Shared understanding (confirmed 2026-07-26)
+DSE **MATH CP Paper2** path: on **B**, light OCR + rules (題號 open, **A–D** confirm) cut **one ROI per MCQ** (figure inside same box) → `layout.json`; on **A**, VLM per question (`--reuse-layout`). Bypass MinerU shreds. v1 single-column; dual-column/profile for other subjects later. v1 success = **boxes right**; quality gate / formal ingest = next stage. N-up/dual-version out of scope.
+Spec: `docs/superpowers/specs/2026-07-26-dse-paper2-mcq-region-design.md`

@@ -79,7 +79,7 @@ def main() -> None:
     print(f"Out: {out_dir} | DPI: {args.dpi}")
     images = pdf_to_images(pdf_path, out_dir, dpi=args.dpi)
     print(f"Done: {len(images)} page image(s)")
-    print(f"Next: ..\\AIbuliding\\venv-train\\Scripts\\python.exe extract_questions.py --images {out_dir}")
+    print(f"Next: .\\.venv\\Scripts\\python.exe run_ocr_pipeline.py {pdf_path} --reuse-images")
 
 
 if __name__ == "__main__":

@@ -111,7 +111,7 @@ def validate_done_dict(data: dict[str, Any], job_dir: Path | None = None) -> dic
             if actual != art["sha256"]:
                 raise ValueError(f"hash mismatch for {art['path']}: expected {art['sha256']}, got {actual}")
             # If pageir/tex exist on disk they must be listed
-        for optional in (f"{doc_id}.pageir.json", f"{doc_id}.tex"):
+        for optional in (f"{doc_id}.pageir.json", f"{doc_id}.tex", f"{doc_id}.quality.json"):
             p = job_dir / optional
             if p.is_file() and optional not in seen:
                 raise ValueError(f"{optional} exists on disk but not listed in artifacts")

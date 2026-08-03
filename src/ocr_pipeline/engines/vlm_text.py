@@ -13,7 +13,9 @@ class VlmTextEngine:
         self.max_new_tokens = max_new_tokens
         self.prompt = prompt or TEXT_ROUTER_PROMPT
 
-    def ocr(self, crop_path: Path) -> str:
+    def ocr(self, crop_path: Path, *, prompt: str | None = None) -> str:
         return self.vlm.generate(
-            self.prompt, image_path=crop_path, max_new_tokens=self.max_new_tokens
+            prompt or self.prompt,
+            image_path=crop_path,
+            max_new_tokens=self.max_new_tokens,
         ).strip()

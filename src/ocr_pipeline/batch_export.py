@@ -6,8 +6,9 @@ import argparse
 import os
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .job_stage import stage_job_dir
 
@@ -52,6 +53,9 @@ def run_batch(
     qdrant_url: str,
     api_key: str | None,
     reindex: bool,
+    require_quality_pass: bool = True,
+    ingest_partial: bool = False,
+    force_ingest: bool = False,
 ) -> int:
     global publish, ingest_job
 
@@ -82,6 +86,9 @@ def run_batch(
                     qdrant_url=qdrant_url,
                     api_key=api_key or "",
                     reindex=reindex,
+                    require_pass=require_quality_pass,
+                    ingest_partial=ingest_partial,
+                    force_ingest=force_ingest,
                 )
                 print(f"INGESTED {doc_id} {n}/{total}")
         except (Exception, SystemExit) as exc:  # noqa: BLE001
@@ -107,6 +114,22 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--qdrant-url", default=os.environ.get("QDRANT_URL", "http://192.168.1.107:6333"))
     ap.add_argument("--api-key", default=os.environ.get("QDRANT_WRITER_KEY") or os.environ.get("QDRANT_API_KEY"))
     ap.add_argument("--staging-root", type=Path, default=None)
+    ap.add_argument(
+        "--require-quality-pass",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Skip ingest when quality.json verdict=fail (default: true)",
+    )
+    ap.add_argument(
+        "--ingest-partial",
+        action="store_true",
+        help="Ingest admitted segments even if quality verdict=fail",
+    )
+    ap.add_argument(
+        "--force-ingest",
+        action="store_true",
+        help="Bypass doc quality gate",
+    )
     args = ap.parse_args(argv)
 
     doc_ids: list[str] = []
@@ -144,6 +167,9 @@ def main(argv: list[str] | None = None) -> int:
         qdrant_url=args.qdrant_url,
         api_key=args.api_key,
         reindex=args.reindex,
+        require_quality_pass=args.require_quality_pass,
+        ingest_partial=args.ingest_partial,
+        force_ingest=args.force_ingest,
     )
 
 

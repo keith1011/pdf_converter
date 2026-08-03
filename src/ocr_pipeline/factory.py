@@ -20,7 +20,9 @@ from .layout import LayoutAnalyzer
 from .pipeline import PipelineManager
 from .prompts import TABLE_ROUTER_PROMPT
 from .routers import DynamicRouter, MathRouter, TextRouter
-from .vlm_client import build_vlm_client
+from .vlm_client import build_mcq_structured_client, build_vlm_client
+
+_MCQ_STAGE3_DEFAULT = "sanitize"
 
 
 def load_ocr_config(path: Path | None = None) -> dict:
@@ -39,8 +41,13 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     engines_cfg = cfg.get("engines") or {}
 
     vlm = build_vlm_client(cfg)
-    backend = str(vlm_cfg.get("backend", "qwen")).lower()
-    text_label = "Qwen2.5-VL" if backend != "glm" else "GLM-4.6V-Flash"
+    model_name = str(vlm_cfg.get("model_name", "")).lower()
+    if "qwen3-vl" in model_name:
+        text_label = "Qwen3-VL"
+    elif "qwen2.5-vl" in model_name or "qwen2_5" in model_name:
+        text_label = "Qwen2.5-VL"
+    else:
+        text_label = "Qwen-VL"
     polish_tokens = int(vlm_cfg.get("max_new_tokens", 2048))
     route_tokens = int(vlm_cfg.get("max_new_tokens_route", min(1024, polish_tokens)))
 
@@ -79,6 +86,15 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         text_engine=text_engine,
         table_engine=table_engine,
         max_new_tokens=route_tokens,
+        structured_ocr_client=build_mcq_structured_client(
+            cfg.get("structured_ocr") or {},
+            default_model_name=str(
+                vlm_cfg.get("model_name", "Qwen/Qwen3-VL-8B-Instruct")
+            ),
+        ),
+        structured_ocr_shadow_mode=bool(
+            (cfg.get("structured_ocr") or {}).get("shadow_mode", True)
+        ),
     )
     crop_dir = Path(paths.get("crop_dir", "output/crops"))
     pipe_cfg = cfg.get("pipeline") or {}
@@ -89,6 +105,9 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     nup_confidence_threshold = float(nup_cfg.get("confidence_threshold", 0.75))
     nup_margin_norm = float(nup_cfg.get("margin_norm", 0.01))
     router = DynamicRouter(math, text, crop_dir=crop_dir, skip_figures=skip_figures)
+    mcq_stage3 = str(pipe_cfg.get("mcq_stage3", _MCQ_STAGE3_DEFAULT)).strip().lower()
+    if mcq_stage3 not in {"sanitize", "vlm"}:
+        mcq_stage3 = _MCQ_STAGE3_DEFAULT
 
     return PipelineManager(
         layout=layout,
@@ -101,7 +120,7 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         ),
         router=router,
         assembler=DraftAssembler(),
-        polisher=FinalPolisher(vlm),
+        polisher=FinalPolisher(vlm, mcq_stage3=mcq_stage3),
         output_dir=Path(paths.get("output_dir", "output")),
         pages_dir=Path(paths.get("pages_dir", "data/pdf_pages")),
         extract_figures=extract_figures,

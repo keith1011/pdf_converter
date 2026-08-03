@@ -69,6 +69,15 @@ _OPTION_ONLY = re.compile(r"^[A-Da-d][\.．、)]\s*$")
 _PUNCT_ONLY = re.compile(r"^[。．.、，,；;：:！!？?\s]+$")
 _OPTION_START = re.compile(r"^[A-Da-d][\.．、)]\s*")
 _QNUM_ONLY = re.compile(r"^\d{1,2}[\.．]\s*$")
+# Stem opener ``4.`` / ``12．`` — not decimals like ``0.002``.
+_QNUM_START = re.compile(r"^(\d{1,2})[\.．](?!\d)")
+# Inline A–D that should start a new line (MCQ options glued on one line).
+_INLINE_OPTION = re.compile(r"(?<!\n)[ \t]+([A-D][\.．])")
+# Leading ``$4. stem$`` (may be followed by more lines).
+_WRAPPED_QNUM_MATH = re.compile(
+    r"^\$(\d{1,2}[\.．])\s*(.+?)\$",
+    re.DOTALL,
+)
 
 
 def _looks_like_math(text: str) -> bool:
@@ -157,6 +166,15 @@ def _partition_math_and_prose(text: str) -> list[tuple[SegmentKind, str]]:
     text = _strip_marking_junk_commands(_clean_math_body(text))
     if not text:
         return []
+
+    # Peel MCQ stem opener ``4. 0.002=`` so ``4.`` is never classified as math.
+    m_op = _QNUM_START.match(text)
+    if m_op and not _QNUM_ONLY.match(text.strip()):
+        opener = text[: m_op.end()].strip()
+        rest = text[m_op.end() :].strip()
+        if rest:
+            return [(SegmentKind.PROSE, opener), *_partition_math_and_prose(rest)]
+
     # Any remaining CJK inside TeX args → treat carefully via tail emit
     if _CJK_CHAR.search(text) and (
         r"\frac" in text or r"\dfrac" in text or r"\tfrac" in text
@@ -175,6 +193,38 @@ def _partition_math_and_prose(text: str) -> list[tuple[SegmentKind, str]]:
         parts.append((kind, before))
     parts.extend(_emit_tail_after_cjk(after))
     return parts
+
+
+def normalize_mcq_block_text(text: str) -> str:
+    """
+    Post-merge cleanup for one MCQ question block.
+
+    - Unwrap ``$N. stem$`` → ``N.\\n$stem$``
+    - Put stem opener on its own line when followed by body
+    - Force ``A./B./C./D.`` onto separate lines when glued mid-line
+    """
+    text = (text or "").strip()
+    if not text:
+        return text
+
+    m_wrap = _WRAPPED_QNUM_MATH.match(text)
+    if m_wrap:
+        opener = m_wrap.group(1)
+        body = m_wrap.group(2).strip()
+        tail = text[m_wrap.end() :]
+        text = f"{opener}\n${body}${tail}"
+
+    m_op = _QNUM_START.match(text)
+    if m_op:
+        opener = text[: m_op.end()].strip()
+        rest = text[m_op.end() :].lstrip(" \t")
+        if rest and not rest.startswith("\n"):
+            text = f"{opener}\n{rest}"
+
+    text = _INLINE_OPTION.sub(r"\n\1", text)
+    # Collapse accidental blank lines inside options, keep single newlines.
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def _normalize_math_delimiters(text: str) -> str:
@@ -310,7 +360,97 @@ def _append_partitions(
 
 
 def coalesce_mcq_segments(segments: list[ContentSegment]) -> list[ContentSegment]:
-    """Merge atomized MCQ option fragments into fewer PageIR segments."""
+    """
+    Merge atomized MCQ fragments into retrieval-useful PageIR segments.
+
+    1) Glue bare ``A.`` + value / trailing punct (legacy).
+    2) On MCQ-like pages, merge each question (stem + A–D) into **one prose**
+       segment so quality gate ``pct_le3`` / ``pct_ge20`` can pass.
+    """
+    if not segments:
+        return segments
+    glued = _coalesce_option_fragments(segments)
+    if _looks_like_mcq_page(glued):
+        return _merge_mcq_question_blocks(glued)
+    return glued
+
+
+def _looks_like_mcq_page(segments: list[ContentSegment]) -> bool:
+    openers = 0
+    options = 0
+    for seg in segments:
+        t = seg.text.strip()
+        if not t:
+            continue
+        if _QNUM_ONLY.match(t) or _QNUM_START.match(t):
+            openers += 1
+        if _OPTION_ONLY.match(t) or _OPTION_START.match(t):
+            options += 1
+    return openers >= 2 or (openers >= 1 and options >= 2)
+
+
+def _seg_join_text(seg: ContentSegment) -> str:
+    t = seg.text.strip()
+    if not t:
+        return ""
+    if seg.kind is SegmentKind.MATH and not t.startswith("$"):
+        return f"${t}$"
+    return t
+
+
+def _is_question_opener_seg(seg: ContentSegment) -> bool:
+    t = seg.text.strip()
+    return bool(_QNUM_ONLY.match(t) or _QNUM_START.match(t))
+
+
+def _merge_mcq_question_blocks(segments: list[ContentSegment]) -> list[ContentSegment]:
+    """Collapse stem crumbs + options into one PROSE segment per ``N.`` opener."""
+    out: list[ContentSegment] = []
+    buf: list[ContentSegment] = []
+
+    def flush() -> None:
+        nonlocal buf
+        if not buf:
+            return
+        if len(buf) == 1 and buf[0].kind is SegmentKind.FIGURE:
+            out.append(buf[0])
+            buf = []
+            return
+        lines = [_seg_join_text(s) for s in buf]
+        lines = [ln for ln in lines if ln]
+        text = normalize_mcq_block_text("\n".join(lines))
+        head = buf[0]
+        out.append(
+            ContentSegment(
+                kind=SegmentKind.PROSE,
+                text=text,
+                source_block_id=head.source_block_id,
+                bbox=head.bbox,
+                integrity=head.integrity,
+                crop_relpath=head.crop_relpath,
+                version_id=head.version_id,
+            )
+        )
+        buf = []
+
+    for seg in segments:
+        if seg.kind is SegmentKind.FIGURE:
+            flush()
+            out.append(seg)
+            continue
+        if seg.kind is SegmentKind.MARK_NOTE:
+            flush()
+            out.append(seg)
+            continue
+        if _is_question_opener_seg(seg) and buf:
+            flush()
+        buf.append(seg)
+    flush()
+    return out
+
+
+def _coalesce_option_fragments(segments: list[ContentSegment]) -> list[ContentSegment]:
+    """Merge atomized MCQ option fragments (``A.`` + value + punct)."""
     if not segments:
         return segments
     out: list[ContentSegment] = []
@@ -353,7 +493,7 @@ def coalesce_mcq_segments(segments: list[ContentSegment]) -> list[ContentSegment
         if (
             _OPTION_START.match(prev.text)
             and not _OPTION_ONLY.match(seg.text)
-            and not _QNUM_ONLY.match(seg.text)
+            and not _QNUM_START.match(seg.text)
             and seg.kind in {SegmentKind.PROSE, SegmentKind.MATH}
             and len(seg.text) <= 48
             and len(prev.text) <= 120

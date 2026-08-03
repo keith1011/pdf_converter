@@ -1,5 +1,190 @@
 # Findings & Decisions
 
+## 2026-07-28 — Deploy sherif1313/Arabic-Qwen3.5-OCR-v4 (isolated)
+- HF: https://huggingface.co/sherif1313/Arabic-Qwen3.5-OCR-v4 — **Arabic** OCR finetune of **Qwen3.5-0.8B** (~0.9B), not CJK/math DSE VLM.
+- Needs **transformers≥5.3** (`Qwen3_5ForConditionalGeneration`); trunk pins `transformers<5` (MinerU) → **`.venv-arabic-ocr` only**.
+- Deploy: `scripts/deploy_arabic_qwen35_ocr.ps1` + `requirements-arabic-qwen35-ocr.txt` + `scripts/smoke_arabic_qwen35_ocr.py`.
+- Smoke on 2015p2 Q1 crop: loads OK; output garbled / incomplete (`A.` + Arabic digits) — **not suitable as trunk Stage2**.
+- Do **not** swap `config/ocr_pipeline.yaml` default away from Qwen3-VL-8B.
+
+## 2026-07-28 — Emit polish: QID outside math + A–D line breaks
+- **`$4. 0.002=$`:** `_partition_math_and_prose` peeled stem opener, but also mis-peeled decimals `0.002` → require `(?!\d)` after dot; `normalize_mcq_block_text` unwraps leading `$N. …$`.
+- **Glued options:** `_INLINE_OPTION` inserts newline before mid-line `A./B./C./D.`.
+- Offline re-finalize: quality still **pass**; tex openers **45/45**; txt chunks **45** with line-start ABCD **45/45**; `$4.` gone.
+
+## 2026-07-27 — MCQ segment merge → quality pass
+- **Cause of fail:** PageIR atomized MCQs (`1.` / `若` / bare math / `A.`) → `pct_le3≈0.40`, `pct_ge20≈0.15`.
+- **Fix:** `coalesce_mcq_segments` on MCQ-like pages merges each `N.`…A–D block into **one PROSE** segment (after option-fragment glue). Non-MCQ pages unchanged.
+- **Verify (offline re-finalize from jsonl):** `n_segments=45`, `pct_le3=0`, `pct_ge20=1`, `admitted_est=1` → **verdict=pass**.
+
+## 2026-07-27 — Stage2 options “missing”: chunk split, not Qwen3 unread prompt
+- **User hypothesis:** Qwen2.5-style long prompt → Qwen3 unread/misread.
+- **A/B smoke (Q1 crop):** `MCQ_ROUTER` / `TEXT_ROUTER` / short EN/ZH / cookbook `"Read all the text…"` **all** returned full A–D. Chat path OK.
+- **Evidence:** `2015p2.mcq.txt` already had **34/45** ABCD; `questions.jsonl` had stems only because `split_question_chunks` split on *any* `\n\n` — VLM blank lines between stem and `A.` orphaned options (jsonl mapped stem-only; finalize still kept full body).
+- **Fix:** split only on `\n{2,}(?=\d{1,2}[\.．])`; shorten `MCQ_ROUTER_PROMPT` (Qwen3 cookbook style, no `LATEX_MATH_RULES` wall). Rebuilt jsonl → **34/45** ABCD.
+- **Still open:** ~11 questions without full A–D in Stage2 OCR (re-run with short prompt may help).
+
+## 2026-07-27 — MCQ Stage3 sanitize + fidelity prompts (once-fix)
+- **Decision:** Stage2 crop text is source of truth for MCQ emit; Stage3 default `pipeline.mcq_stage3: sanitize` (pylatexenc `unknown_char_policy='keep'` per Context7 `/phfaist/pylatexenc`) — **no VLM rewrite**.
+- **Prompts:** `MCQ_ROUTER_PROMPT` (Stage2 when `meta.question_id`) + `MCQ_POLISH_PROMPT` (optional `mcq_stage3: vlm`) — forbid 解題／故／答案為; require keep A–D.
+- **Emit:** `render_page_ir` inserts blank line before `N.` openers; `coalesce_mcq_segments` must not glue next stem onto option.
+- **Config:** `max_new_tokens_route: 1536` for fuller stem+A–D crops.
+- **Why not VLM polish default:** 2015p2 Qwen3 per-Q polish invented solutions and dropped options (~10/45 ABCD in jsonl).
+
+## 2026-07-27 — Post-run check: 2015p2.mcq (Qwen3, per-Q polish)
+- **Run OK:** exit 0; wall **1h15m** (route≈701s · polish≈3796s); `questions.jsonl` **45/45**.
+- **Quality still fail:** `pct_le3≈0.36`, `pct_ge20≈0.17`.
+- **Separation half-fixed:** no longer “D.+next stem on same line” as primary failure mode for early pages; many Qs have lone `N.` lines. But finalize still drops/mangles some stems in `.tex` (**missing openers:** 9,11,29,32–34,45; Q31 glued on one line with A–D).
+- **Content regression (main):** Stage3 invents **worked solutions** (Q3/Q6/Q7/Q12…) and often **drops A–D**. jsonl ABCD-complete ≈ **10/45**; many rows are stem-only or solved prose. `.tex` still has ~38 A–D blocks (from segments that kept options), so tex ≠ faithful jsonl.
+- **jsonl is polished text** (`_write_questions_jsonl` maps polished chunks by qid); weak jsonl = weak per-Q polish, not Stage2 alone.
+- **Next levers:** MCQ-faithful polish prompt (no solve); prefer Stage2 crop text + light sanitize for emit; harden finalize so blank-line/`N.` boundaries survive segmenter.
+
+## 2026-07-27 — Per-question emit + pylatexenc at polish
+- **Hypothesis confirmed:** glued/missing options in `.tex` from page-level Stage3, not bad MCQ boxes.
+- **Fix at source:** `DraftAssembler.stitch` (all blocks have `question_id`) emits `N.` + `\n\n`; `FinalPolisher.polish` splits those chunks and VLM-polishes each; pipeline writes `*.questions.jsonl`.
+- **pylatexenc:** Unicode→LaTeX **after** VLM (`encode_unicode_outside_math`); cannot be “used by” the model — deterministic assist only. Scripts via existing helper first, then `unicode_to_latex(non_ascii_only=True)` outside `$...$`.
+
+## 2026-07-27 — Trunk VLM → Qwen3-VL-8B-Instruct
+- HF: https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct — needs recent transformers (`Qwen3VLForConditionalGeneration`); main `.venv` has **4.57.6**.
+- Wired: `config/ocr_pipeline.yaml` + `vlm_client._load_causal_vlm` + factory label `Qwen3-VL`.
+- Smoke OK: 4bit load, text `OK`, Q2 crop OCR `2`. Still greedy decode (`temperature: 0.0`).
+
+## 2026-07-27 — Docling as layout candidate (user link)
+- Project: [docling-project/docling](https://github.com/docling-project/docling) — PDF→DoclingDocument; layout via **Heron** (RT-DETR OD: para/table/figure/header…); TableFormer; OCR; optional VLM (GraniteDocling).
+- Fit vs our KPI (**1 MCQ = 1 box**, 題號+A–D): Docling is **general page-element layout**, not exam-question regioner. Likely same class of miss as MinerU/Surya/DocLayout (symbol shreds / no MCQ semantics).
+- Grill lock still: specialized Paper2 rules, not swap general DocLayout packages. Current tex glue root cause is **page stitch+polish**, not missing a better general layout model.
+- Optional later: one-page bakeoff overlay only if user wants evidence; do not replace `dse_mcq_region` as trunk without that.
+
+## 2026-07-27 — Debug: “題目黏連／缺選項”不是 layout 切錯（2015p2.mcq）
+### Evidence
+1. **Layout**: `layout.json` 有 **45** 獨立 TEXT boxes（Q1–45）；overlays（如 p3）Q6/Q7 分框清楚；crops 皆存在。
+2. **Stage2**: run log **45 route + 45 done**（每題一張 crop、一次 VLM）。Q2 crop 影像本身含 `2.` + 題幹 + A–D。
+3. **最終 .tex**: 同頁題被黏成一行／丟題號／丟選項（例：Q1 的 D 與 Q2 題幹同行；Q6/Q7 無獨立題號分隔）。
+4. **組裝路徑**: `route_page`（逐題）→ `DraftAssembler.stitch`（**整頁** blocks 拼成一個 draft）→ `FinalPolisher.polish`（**整頁**再 VLM，無圖）→ `finalize_content_first`（按頁拼 .tex）。**沒有**「每題寫完空行 + 題號」的輸出契約；也未把 Stage2 逐題 raw 存成 jsonl。
+
+### Root cause（hypothesis, confirmed by data flow）
+- 使用者看到的「連在一起／缺選項」主要來自 **page-level stitch + Stage3 page polish 重寫**，不是 MCQ region 把兩題切進同一框。
+- Layout 仍可能有次要問題（例：Q18 orphan `x1=307` 偏右），但無法解釋「45 框都在、crop 有 A–D、tex 卻黏／缺」的主現象。
+
+### Desired fix direction (user)
+- 輸出時每題空行分隔 + 寫題號；VLM 45 圖應對 45 題；考慮 **per-question emit**（甚至 per-question polish），勿整頁 polish 融掉邊界。
+
+## 2026-07-27 — Empty-page polish echoed LATEX_MATH_RULES into .tex
+- Symptom: compile showed `分數：禁止 a/b…` (prompt chrome, not exam).
+- Cause: 2015p2 page 1 has 0 blocks; Stage3 polished empty draft → model dumped `prompts.LATEX_MATH_RULES`.
+- Fix: `FinalPolisher.polish` skips blank drafts; rejects multi-marker rules echo (keep draft); pipeline also skips empty `pr.draft`. Cleaned existing `2015p2.mcq.{tex,txt}` prefix.
+
+## 2026-07-27 — First VLM pass on 2015p2 MCQ layout
+- `--reuse-layout --output-tag mcq` → exit 0 (~784s; route 311 + polish 466).
+- Artifacts: `output/2015p2.mcq.{tex,txt,pageir.json,quality.json}`
+- Quality: **fail** (pct_le3=0.41) — layout KPI only for now.
+- Draft caveat: page 1 has **0 MCQ boxes** (cover); Stage3 polish dumped LaTeX style rules into the head of `.tex`/`.txt`. Real MCQ text appears from page 2 (Q1+) but segments are still noisy (glued options / incomplete stems).
+
+## 2026-07-27 — Q36/Q39 diagram bottom clip (last-on-page)
+- Mid-page questions get y2 from gap-to-next stem; **page-final** MCQs (2015 p12 Q36, p13 Q39) only had D + `below_options_pad_px` → axis/curve tails looked clipped.
+- Fix: after gap snap, set last region `y2 = max(y2, page_h - footer_margin_px)` with `footer_margin_px=160` (above footer chrome ~y=2222 on 2339px pages).
+- Evidence: y2=2179; figure-side pad-below-ink ≈180px (Q36) / ≈250px (Q39). Do **not** drop margin to 100 — that swallows footer text into the crop.
+
+## 2026-07-27 — Merge fixes: 2016 Q8+Q9, 2012 Q1+Q2 → all 45/45
+- **2016 p4:** right-side graph `B.`/`D.` skipped by left_bias → Q9 dropped → Q8 expanded. Fix: options ignore left_bias.
+- **2012 p2:** OCR `2.xs` (from `2x^5`) false-opened Q2; real `2.` rejected by increasing ids → Q1+Q2 merged under fake Q2. Fix: reject opener with **Latin letter glued after the dot** (`2.xs`), but allow `1. Find…` / `11．設`.
+- Rebuild from cached lines: **2012/2013/2015/2016 all 45/45**, 0 incomplete. Tests 13 passed.
+
+## 2026-07-27 — 2016p2 p4 was merge not miss (Q8+Q9)
+- User correction: Q8 and Q9 boxed together; Q9 not absent.
+- Cause: graph MCQ put `B.`/`D.` on **right** half → `left_bias` skipped them → Q9 incomplete → dropped → Q8 y-expand swallowed Q9.
+- Fix: option anchors **no longer require left bias** (stems still do).
+- After rebuild: **2013/2015/2016 = 45/45**; **2012 = 44** (still missing Q1 only; Q38 recovered).
+
+## 2026-07-27 — Multi-year layout bakeoff (2012/13/15/16)
+| Doc | Boxes | Missing | Notes |
+|-----|------:|---------|-------|
+| **2015p2** | **45** | [] | pass |
+| 2012p2 | 43 | **1, 38** | p2 starts at Q2; p13 jumps 37→39 |
+| 2013p2 | 44 | **32** | p11→p12 gap 31→33 |
+| 2016p2 | 44 | **9** | p4 has 8 then 10 |
+| All | — | — | **0 incomplete** after harden rules |
+
+Artifacts: `data/pdf_pages/<year>/layout.json` + `output/dse_mcq_layout_<year>/`
+
+## 2026-07-27 — Layout rules hardened (2015p2 → 45/45)
+- Fixes vs prior 48-box run:
+  1. `question_id_min/max` — reject `0.002…` false opener
+  2. `require_increasing_ids` — reject mid-stem Roman `I.`→`1.` / stray `2.`
+  3. `drop_incomplete` — omit boxes without ≥3 A–D
+  4. `recover_orphan_options` — invent next qid for orphan A–D (recovers **Q18**)
+  5. preamble only pulls OTHER lines (does not swallow orphan options)
+- Rebuilt from cached RapidOCR lines: **15 pages, 45 questions, 0 incomplete, qids 1–45 contiguous**
+- Tests: `test_dse_mcq_region` + profile → **12 passed**
+- Artifacts: `data/pdf_pages/2015p2/layout.json`; overlays `output/dse_mcq_layout_2015p2/`
+
+## 2026-07-27 — Full 2015p2 MCQ layout (stage: layout-first)
+- Script: `scripts/dse_mcq_layout_doc.py` (RapidOCR → regions → multi-page `layout.json`)
+- Output: `data/pdf_pages/2015p2/layout.json` (source=`dse_mcq_region:math_cp_p2`); MinerU backup `layout.json.bak_mineru`
+- Debug: `output/dse_mcq_layout_2015p2/` (per-page lines + overlays + `summary.json`)
+- Counts: **15 pages, 48 boxes**; expected MCQ **1–45**
+- Coverage issues:
+  - **Missing Q18** (p6 ends 16–17, p7 starts 19)
+  - **False openers:** qid `0` on p3; duplicate `1` on p9/p13; duplicate `2` on p11
+  - **4 incomplete** (no A–D): p3/q0, p9/q25, p11/q2, p13/q37
+  - p1 = 0 regions (cover/instructions — OK)
+- p4 still good (8–11). Next layout polish: reject incomplete/false qids; recover Q18; prefer monotonic qid sequence
+
+## 2026-07-26 — Smoke: 2015p2 page 4 MCQ regions
+- Input: `data/pdf_pages/2015p2/page_004.png` (scan; no PDF text layer)
+- Lines: RapidOCR (`uv run --with rapidocr-onnxruntime`) → `output/dse_mcq_smoke_2015p2_p4/lines.json` (46 lines)
+- Truth: **Q8–Q11** (4 MCQs). Detector: **4 regions**, all A–D, `incomplete=false`
+- Artifacts: `layout.json`, `overlay.png` under `output/dse_mcq_smoke_2015p2_p4/`
+- OCR quirks fixed: lone `8.`/`A.` (`\s*`); preamble before number; D same-row value; y-expand to next Q (figures)
+- Residual: Q8 may clip far-right of graph; `try_run_light_ocr` still stub (smoke used one-off script)
+
+## 2026-07-26 — DSE MCQ region TDD shipped (no commit)
+- Plan: `docs/superpowers/plans/2026-07-26-dse-paper2-mcq-region.md`
+- Modules: `dse_mcq_{types,profile,region,layout,ocr}.py` + `config/profiles/math_cp_p2.yaml` + `scripts/dse_mcq_regions.py`
+- Tests: 9 passed (`test_dse_mcq_*`); ruff clean on touched files
+- Code-review (inline vs working tree): Spec mostly met; gaps = PP-OCR stub, no figure-contour expand, no “nearby options” soft reject beyond left-bias
+- ohm-mcp: region complexity reduced via helpers; layout “duplication” = false positive on signatures
+- B next: implement `try_run_light_ocr` with PaddleOCR/PP-OCR on Ubuntu → dump lines JSON or call directly
+
+## 2026-07-26 — Design approved: DSE Paper2 MCQ 1題1框
+- User confirmed shared understanding.
+- Spec: `docs/superpowers/specs/2026-07-26-dse-paper2-mcq-region-design.md` (Approved)
+- Path: B light OCR + 題號/A–D rules → question ROI `layout.json` → A VLM `--reuse-layout`
+- Reuses `layout_artifact` v1; `block_type=text`; profile `math_cp_p2`; MinerU fallback per page on empty/fail
+
+## 2026-07-26 — Grill: DSE Paper2 1題1框 (in progress)
+- Ideal: **1 MCQ = 1 layout box** (full stem + A–D). User strongly agrees.
+- Approach locked: **specialized DSE Paper2 MCQ question-region rules** — not “swap another general DocLayout”.
+- Why: PP-DocLayout / MinerU cut by paragraph/formula/figure, not by question number → over-fragment → many VLM calls → high `pct_le3`.
+- Existing `assemble.coalesce_stitched_fragments` / `segmenter.coalesce_mcq_segments` insufficient for instruction shreds + formula atomization.
+- Pipeline hook locked **A**: page image / light line detect → question ROI crops → one VLM call per question (bypass MinerU fine boxes on Paper2 path).
+- Boundary signals locked **B**: question-number opens a region; **A–D option anchors** confirm/close a full MCQ (avoids false splits on in-stem `1.` / bare digits).
+- Subject scope locked **C**: v1 validate **MATH CP Paper2** only; implement as extensible subject profiles.
+- Dual-column locked **C**: v1 single-column; dual-column detect as profile flag default **off**.
+- Anchor OCR host locked **A**: **B** light OCR (PP-OCR / line detect) → question ROIs + `layout.json`; **A** VLM only (`--reuse-layout`).
+- Figures locked **A**: diagram stays inside the same question ROI (still 1 box / 1 VLM call).
+- v1 success locked **C**: prove **box correctness** first (count ≈ truth; most boxes contain stem+A–D); quality gate is next-stage KPI.
+- **Grill closed pending user confirm** of shared understanding in `task_plan.md` Next Action.
+- **Confirmed** 2026-07-26; design written (see above).
+
+## 2026-07-26 — OCR quality gate implemented (TDD)
+- Issues #4 (core) + #3 (wiring); Copilot assign **failed** (`Bot does not have access`) → local TDD
+- Module `ocr_pipeline.quality`; ingest/batch flags; finalize emits `.quality.json`
+- Focused tests 29+ green; ruff clean on touched files; ohm `analyze_codebase` on quality: 0 issues
+- Offline `nup-v2`: fail (le3=0.277, ge20=0.225, admitted_est=0.533)
+
+## 2026-07-26 — N-up gate temporarily disabled
+- User will manually flatten dual-layout PDFs to single-page; `nup.enabled: false` in `config/ocr_pipeline.yaml`
+- Code path kept; re-enable when needed
+
+## 2026-07-26 — Quality gate implemented (TDD; Copilot assign failed)
+- Issues: [#4](https://github.com/keith1011/pdf_converter/issues/4) core, [#3](https://github.com/keith1011/pdf_converter/issues/3) wiring
+- Copilot assign: GraphQL `Bot does not have access` — implemented locally
+- `ocr_pipeline.quality` + ingest/batch flags; finalize emits `.quality.json`
+- Tests: quality admit/report + ingest gate — green; ruff clean on touched files
+- ohm-mcp: analyze_codebase on quality.py (no high issues)
+- Offline nup-v2: verdict **fail** (le3=0.277, ge20=0.225, admitted_est=0.533)
+
 ## 2026-07-25 — nup-v2 Stage2 ~45s/block (EOS / token burn)
 - Symptom: `nup-v2` Stage2 avg ~38–46s/block (flat); died mid `p007_v0_b007` after ~2h. Compare `nup-full` ~1–5s after warmup.
 - Timing math: ~45s ≈ burning `max_new_tokens_route=1024` at normal tok/s — not “more pages”.
@@ -355,3 +540,49 @@ Executed in order after review:
 1. **Shared VLM path** — `run_vlm_generate` / `resize_image` / `strip_fences` in `vlm_client.py`; `Glm46VFlashClient.generate` delegates
 2. **Dead API** — removed `decide_polish_per_page` + auto polish warn; always per-page polish; `--polish-per-page` deprecated no-op; `PipelineLock` context-manager only
 3. **Light ruff** — `pyproject.toml` + `requirements-dev.txt`; install with `uv pip install -p .venv ruff` (GPU requirements.txt kept); `ruff check src/ocr_pipeline run_ocr_pipeline.py arrange_only.py tests` clean
+## 2026-07-29 — Cross-year MCQ visual QA root causes
+
+- 多數 missing qids 都是 affected page 的第一題；RapidOCR 漏題號但保留 A–D。
+  `_recover_orphan_options` 只掃 accepted region 之後的 gap，沒有掃第一個 region 前的 prefix。
+- 2020 p4 把 Roman `II.` OCR 成 `11.`；greedy increasing filter 選了 `[8, 11]`
+  並丟棄後面的真 Q9/Q10，之後 orphan recovery 錯補成 Q12–Q14。
+- 2017 Q31 是 graph-choice 題；RapidOCR 看見明確 `31.`、下一題 `32.`，但 A/C 未讀到、
+  D 缺句點，只命中 B，因 `min_option_hits=3` 被 drop。
+- `MCQ_ROUTER_PROMPT` 只說公式使用 `$...$`，沒有說明貨幣 literal dollar 必須輸出
+  `\$`，與 `error.txt` 多年 currency omission 一致。
+- 14 張 pre-fix debug overlays 已集中在 `output/missing_question_overlays/`。
+- 修復後 2012--2023 detector replay 全部為 45/45，無 missing/duplicate；6 個 affected
+  layouts 已重建，post-fix overlays 在 `output/fixed_question_overlays/`。
+- 2017 Q31 仍標記 `incomplete=true`（light OCR 只命中 B anchor），但以明確 Q31→Q32
+  sequence evidence 保留，且 bbox 已目視確認不再吞 Q32。
+- Existing txt/jsonl 未重跑 VLM；prompt 修復目前只由 regression test 證明指令存在，
+  尚未由模型輸出驗證。
+- User follow-up found recovered qids were assigned but still outside crops:
+  orphan bbox came only from OCR-visible stem/options, so missed printed qids
+  shifted `x1` right; tall fraction stems also left page-leading `y1` too low.
+  Fixed by same-page stem gutter alignment plus 64 px leading top pad, clamped
+  below `甲部`.
+- 2022 Q1/Q5 follow-up was a stale-artifact issue: detector replay produced
+  x1=197/152 versus stale x1=281/230. A foreground rebuild put both printed
+  qids inside their boxes. The refreshed 2021 Q40 overlay is also correct.
+- Exact whole-page left-edge equality is unnecessary for these cases: recovered
+  questions already reuse the page's detected qid gutter (observed variation
+  only 0--3 px). Keep `content_x_max_ratio` right extension because graphs and
+  right-side choices can exceed OCR text bounds.
+
+## 2026-07-29 — Instructor integration boundary
+
+- `Qwen25VlClient.generate()` calls Transformers `model.generate()` directly;
+  Instructor has no supported patch seam there.
+- The safe integration is a parallel, opt-in OpenAI-compatible vision endpoint.
+  In shadow mode it adds validated metadata but cannot alter official Stage2
+  text, Stage3 sanitize, PageIR, TXT, or TEX.
+- `max_retries=1` means one initial request plus at most one validation retry.
+  Values above one are rejected locally.
+
+## 2026-07-29 — Python cleanup
+
+- Removed approved one-off diagnostic/smoke/patch scripts and superseded DSE entrypoints.
+- Retired the old `draft.jsonl` utilities and deprecated GLM backend.
+- Removed no-op `polish_per_page`, unused prompt/client aliases, and the light-OCR stub.
+- Kept N-up and the wired optional OCR engines; the locked DSE path is unchanged.

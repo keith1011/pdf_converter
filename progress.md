@@ -1,6 +1,200 @@
 # Progress Log
 
-# Progress Log
+## 2026-07-28 14:28 — Wrote handoff_ocr.md for Codex
+- Focused DSE Paper2 MCQ OCR handoff: status green, locks, run cmds, next work, anti-regressions.
+
+## 2026-07-28 08:20 — Deploy Arabic-Qwen3.5-OCR-v4 (isolated venv)
+- Created `.venv-arabic-ocr` (transformers 5.14 + torch cu126).
+- Smoke load+infer OK; Chinese MCQ crop quality poor (Arabic-specialized).
+- Trunk unchanged (still Qwen3-VL-8B).
+
+## 2026-07-28 08:15 — Fix QID-in-math + option newlines; refresh txt
+- `segmenter`: peel stem opener with `(?!\d)`; `normalize_mcq_block_text` unwrap `$N.$` + split inline A–D.
+- Re-finalize `2015p2.mcq` → openers 45/45, ABCD line-start 45/45, quality pass.
+- Exported Desktop + opened `output/2015p2.mcq.txt`.
+
+## 2026-07-27 19:34 — Full run + analyze (segment-merge in path)
+- Exit **0**; wall **6m02s** (route≈359s · polish≈0.01s).
+- **Quality pass** (45 segs, le3=0, ge20=1, admit=1).
+- jsonl **ABCD 45/45**, no 解題. Minor: Q4 opener swallowed into `$4. …$` in rendered txt/tex; some options same-line after merge so line-based ABCD on txt < jsonl.
+
+## 2026-07-27 19:27 — Full pipeline re-run + analyze (post segment-merge)
+- `uv run python run_ocr_pipeline.py data/sources/2015p2.pdf --reuse-layout --output-tag mcq`
+
+## 2026-07-27 18:30 — MCQ segment merge → quality pass
+- Implemented question-block coalesce in `segmenter.coalesce_mcq_segments`.
+- Offline re-finalize `2015p2.mcq` from jsonl → **quality verdict=pass** (45 segs, le3=0, ge20=1).
+- Tests: `test_mcq_segment_merge` + related green.
+
+## 2026-07-27 16:48 — Stage2 re-route done (short MCQ prompt)
+- Exit **0**; wall **5m50s** (route≈347s · polish≈0.01s).
+- **jsonl ABCD = 45/45**; no 解題 markers. Quality still fail (segment KPI).
+- Chunk-split + short prompt working for emit.
+
+## 2026-07-27 16:42 — Start Stage2 re-route 2015p2 (short MCQ prompt + fixed split)
+- `uv run python run_ocr_pipeline.py data/sources/2015p2.pdf --reuse-layout --output-tag mcq`
+- Goal: lift ABCD beyond 34/45; verify jsonl keeps options after fixed chunk split.
+
+## 2026-07-27 16:40 — Stage2: fix chunk split + Qwen3-short MCQ prompt
+- Confirmed Qwen3 **does** OCR A–D (A/B smoke + `.txt` 34/45); jsonl bug was over-splitting on inner blank lines.
+- `split_question_chunks` now lookahead-splits on stem openers only; `MCQ_ROUTER_PROMPT` shortened (cookbook-style).
+- Rebuilt `2015p2.mcq.questions.jsonl` → ABCD **34/45** (no VLM re-run).
+- Next optional: full Stage2 re-route for remaining ~11 weak options.
+
+## 2026-07-27 16:27 — 2015p2 MCQ re-run done (sanitize Stage3)
+- Exit **0**; wall **5m46s** (route≈343s · polish≈0.01s · total≈343s) — Stage3 sanitize OK.
+- jsonl **45/45**; txt blank chunks **45**; **no** 解題 markers.
+- Still: quality fail; jsonl ABCD-complete only **~2/45** — Stage2 crop OCR dropping options (next lever).
+- tex openers missing some qids (17,19,20,29,32,34,45).
+
+## 2026-07-27 16:21 — Start timed 2015p2 MCQ re-run (sanitize Stage3)
+- Command: `uv run python run_ocr_pipeline.py data/sources/2015p2.pdf --reuse-layout --output-tag mcq`
+- Expect: Stage3 ~instant; wall ≈ Stage2 route (~12m prior); verify no invented solutions + A–D kept.
+
+## 2026-07-27 16:15 — MCQ sanitize Stage3 + prompts (user: 一次改完 + context7)
+- Added `MCQ_ROUTER_PROMPT` / `MCQ_POLISH_PROMPT`; TextRouter uses MCQ prompt when `question_id`.
+- Stage3 default: `polish_mcq` → sanitize Stage2 text (no VLM); config `mcq_stage3: sanitize|vlm`.
+- Blank-before-qid in `render_page_ir`; coalesce no longer glues next stem onto options.
+- pylatexenc keep policy confirmed via Context7 `/phfaist/pylatexenc`.
+- Tests: `test_mcq_stage3_sanitize` + updated per-question emit — related suite green.
+- Next: timed `--reuse-layout --output-tag mcq` re-run to verify fidelity + wall time.
+
+## 2026-07-27 15:35 — Post-run check (user: 跑完了檢查)
+- Timing/artifacts OK; 45 jsonl rows; quality fail unchanged.
+- Verdict: **結構進步、內容退步** — per-Q boundaries better than page-polish glue era, but Qwen3 polish often solves MCQs / drops options; `.tex` still loses some qids after finalize.
+- Logged detail in `findings.md`. GPU idle (~2.3/12.3 GiB).
+
+## 2026-07-27 14:08 — Kill hung polish; fix pylatexenc CJK spam; re-run timed
+- Stopped PID shell/python for incomplete 2015p2.mcq run (~15+ min stuck flooding CJK warnings).
+- Fix: `UnicodeToLatexEncoder(unknown_char_policy='keep', unknown_char_warning=False)` — keep 漢字, no stderr spam.
+- Re-start timed `--reuse-layout --output-tag mcq` → **exit 0**
+- **Timing** (`output/2015p2.mcq.timing.txt`): wall **4502s (1h15m02s)**; route=701s · polish=3796s · total=4497s
+- Wrote `2015p2.mcq.questions.jsonl` (45 Q); quality still fail; some `near-max tokens` / polish parse fail → draft wrapped
+
+## 2026-07-27 13:48 — Timed VLM re-run 2015p2 (per-question polish + Qwen3)
+- Command: `uv run python run_ocr_pipeline.py data/sources/2015p2.pdf --reuse-layout --output-tag mcq`
+- Expect longer Stage3 (per-question polish). Timing → `output/2015p2.mcq.timing.txt`
+
+## 2026-07-27 12:42 — Per-question emit + pylatexenc polish assist
+- Root cause (prior): page stitch/polish glued MCQs — not layout boxes.
+- Fix: MCQ `stitch` → `{qid}.` + blank line between questions; Stage3 `polish` splits and polishes **per question**; write `{source}.questions.jsonl`.
+- [pylatexenc](https://github.com/phfaist/pylatexenc): post-VLM `encode_unicode_outside_math` (not a VLM tool). Dep: `pylatexenc>=2.10`.
+- Tests: `test_per_question_emit` + polish extract green; pipeline smoke tests set `nup_enabled=False`.
+
+## 2026-07-27 12:30 — Switch trunk VLM to Qwen3-VL-8B-Instruct
+- Config: `vlm.model_name: Qwen/Qwen3-VL-8B-Instruct` (4bit kept).
+- Loader: prefer `Qwen3VLForConditionalGeneration` when name has `qwen3-vl`; Qwen2.5 path retained.
+- Tests: `test_vlm_factory` + greedy **14 passed**.
+- Smoke: load ~170s (incl. HF fetch) → class=`Qwen3VLForConditionalGeneration`; text gen `OK`; crop Q2 → `2`. exit 0.
+- transformers in main `.venv`: **4.57.6** (already has Qwen3VL).
+
+## 2026-07-27 11:26 — Systematic debug: glued/missing MCQs in 2015p2.mcq
+- Layout **not** primary cause: 45 boxes, 45 Stage2 routes; overlays/crops show separate Qs with A–D (e.g. Q2, Q6/Q7, Q35).
+- Failure layer: page `stitch` + Stage3 **page** polish → drops 題號、黏題、丟選項；no per-Q jsonl.
+- Secondary layout: Q18 orphan crop missing stem (x1=307).
+- Next (pending user): per-question emit (題號 + 空行) / skip page polish or polish per Q.
+
+## 2026-07-27 10:45 — Clean output + re-run 2015p2 VLM (timed)
+- Deleted old `output/*` document artifacts; kept `dse_mcq_layout_*` + smoke + `.gitkeep`.
+- Re-run: `--reuse-layout --output-tag mcq` → **exit 0**
+- **Timing** (`output/2015p2.mcq.timing.txt`):
+  - Wall: **729.4s** (00:12:09)  START 10:46:18 → END 10:58:27
+  - Pipeline: layout=0.001s · **route=300.9s** · **polish=425.4s** · finalize=0.023s · **total=726.3s**
+- Artifacts: `output/2015p2.mcq.{tex,txt,pageir.json,quality.json,run.log,timing.txt}`
+- Quality still fail (pct_le3=0.38); Stage3 is quiet by design (one line then polish).
+
+## 2026-07-27 10:05 — Fix empty-page polish echoing LATEX_MATH_RULES
+- Cause: page 1 (0 MCQ boxes) → empty draft → Stage3 still polished → VLM copied `分數：禁止…` into body.
+- Fix: skip VLM on blank draft; reject output that looks like math-rules echo; strip leaked block from `output/2015p2.mcq.{tex,txt}`.
+- Tests: `test_polish_extract` 5 passed.
+
+## 2026-07-27 09:40 — Start VLM on 2015p2 MCQ layout
+- Command: `uv run python run_ocr_pipeline.py data/sources/2015p2.pdf --reuse-layout --output-tag mcq`
+- Layout: `data/pdf_pages/2015p2/layout.json` (15 pages, 45 TEXT blocks, source=`dse_mcq_region:math_cp_p2`)
+- GPU preflight: ~2.0/12.3 GiB used before load
+- **Done** exit 0 in ~784s (route 311s + polish 466s). Artifacts: `output/2015p2.mcq.{tex,txt,pageir.json,quality.json}`
+- Quality gate: **fail** (pct_le3=0.41, pct_ge20=0.13) — expected; KPI was box-first, not ingest pass
+
+## 2026-07-27 09:35 — Q36/Q39 last-on-page bottom pad
+- Root cause: last MCQ on page had no next-stem gap → y2 stopped near D + `below_options_pad`.
+- Fix: `_snap_vertical_gaps` extends last region to `page_h - footer_margin_px` (160; above footer).
+- Verify: Q36/Q39 y2=2179; figure pad-below-ink 184 / 248px. Overlays rebuilt. Tests 15 passed.
+- Note: margin=100 swallows footer into crop — keep 160.
+
+## 2026-07-27 09:25 — Fix 2015 figure clip / y-align / overlap
+- Preamble: only nearby stem-prose (skip axis crumbs `log3x` / lone `B`).
+- Vertical gaps: default → previous Q (keep graphs below options); orphan next → claims gap above A–D.
+- Widen x2 to `content_x_max_ratio=0.96`.
+- Rebuilt 2015 overlays; 45/45; tests 14 passed. Opened issue pages for re-check.
+
+## 2026-07-27 09:10 — Fix 2012 Q1+Q2 merge; all years 45/45
+- Reject glued Latin after stem dot (`2.xs`); token-end check (not pattern `\s*`).
+- 2012/13/15/16 layout rebuild → **45/45** each. Overlay: 2012 p2 refreshed.
+
+## 2026-07-27 09:05 — Fix Q8+Q9 merge (option right-bias)
+- Options no longer left-biased; rebuilt 4 years from cached lines.
+- Pass: 2013/2015/2016 = 45; 2012 = 44 (miss Q1). Overlay refreshed for 2016 p4.
+
+## 2026-07-27 08:55 — Layout bakeoff 2012/13/16
+- Ran `dse_mcq_layout_doc.py` on 2012p2, 2013p2, 2016p2 (~2.5 min RapidOCR).
+- Results: 2015=45/45 pass; 2012=43 (miss 1,38); 2013=44 (miss 32); 2016=44 (miss 9). All 0 incomplete.
+
+## 2026-07-27 08:50 — Layout rules improved → 2015p2 45/45
+- Hardened profile/region: id range, increasing qids, drop incomplete, orphan A–D → next qid.
+- Re-ran layout from cached lines → **45 questions, missing=[], incomplete=0**.
+- Unit tests 12 passed. Overlays refreshed under `output/dse_mcq_layout_2015p2/`.
+
+## 2026-07-27 08:40 — Full 2015p2 MCQ layout
+- Ran `scripts/dse_mcq_layout_doc.py` on all 15 pages (~70s with RapidOCR).
+- Wrote `data/pdf_pages/2015p2/layout.json` (48 Q-boxes); overlays in `output/dse_mcq_layout_2015p2/`.
+- Gaps: missing Q18; false qids 0/1/2; 4 incomplete regions. Layout-first KPI not yet clean.
+
+## 2026-07-26 23:50 — Smoke 2015p2 p4: 4/4 MCQ boxes
+- RapidOCR lines → region cutter → 4 questions (8–11), all A–D complete.
+- Profile/rules hardened for real OCR (lone `N.`/`A.`, preamble, D same-row, y-expand to next).
+- Overlay: `output/dse_mcq_smoke_2015p2_p4/overlay.png`; `test_dse_mcq_region` 6 passed.
+- Next optional: wire light OCR backend; A-side `--reuse-layout`.
+
+## 2026-07-26 23:50 — DSE MCQ region TDD green + review
+- Implemented Tasks 1–5; focused `test_dse_mcq_*` green; ruff + ohm review done; no commit.
+- Plan: `docs/superpowers/plans/2026-07-26-dse-paper2-mcq-region.md`
+
+## 2026-07-26 23:28 — Design approved: DSE P2 MCQ region
+- User confirmed grill locks.
+- Wrote `docs/superpowers/specs/2026-07-26-dse-paper2-mcq-region-design.md` (Approved).
+
+## 2026-07-26 23:28 — Grill closed (pending confirm): DSE P2 1題1框
+- Locked **C**: v1 KPI = box correctness; quality pass later.
+- Full lock table in `task_plan.md` grill section + Next Action shared understanding.
+- Await user OK → design spec / writing-plans.
+
+## 2026-07-26 23:27 — Grill: figures = A (併進題框)
+- Locked **A**: figure inside same question ROI (1題1框).
+- Next: success metric → close grill.
+
+## 2026-07-26 23:26 — Grill: anchor OCR = A (B機→layout.json)
+- Locked **A**: B light OCR → question ROI + `layout.json`; A VLM only.
+- Next: figures-in-ROI / success metric / close grill.
+
+## 2026-07-26 23:25 — Grill: dual-col = C (單欄 v1 / 開關預設關)
+- Locked **C**: single-column first; dual-column profile switch default off.
+- Next: line-OCR host / figures / close grill.
+
+## 2026-07-26 23:25 — Grill: subject = C (MATH v1 + profiles)
+- Locked **C**: MATH CP P2 gold first; subject profiles for later papers.
+- Next: dual-column / line-OCR host.
+
+## 2026-07-26 23:24 — Grill: boundary = B (題號+A–D)
+- Locked **B**: open on question number, close/confirm with A–D anchors (math stems often contain `1.`).
+- Next: subject scope / column layout / line-OCR host.
+
+## 2026-07-26 23:22 — Grill: Paper2 hook = A (影像→題ROI→VLM)
+- Locked pipeline **A**: bypass MinerU shreds; cut question ROIs from page image / light line detect → one box/question → VLM.
+- Next grill Q: primary signals for question boundaries.
+
+## 2026-07-26 23:21 — Grill: lock DSE Paper2 題區規則
+- Confirmed: ideal **1題1框**; approach = **DSE Paper2 MCQ specialized region detection/rules** (not general layout package swap).
+- Updated `task_plan.md` Current Phase + Decisions; `findings.md` grill note.
 
 ## 2026-07-25 15:40 — Full nup-full OCR + off-center gutter fix
 - Full 8p exit 0 (~843s): `output/2014-DSE-MATH-CP-2.nup-full.*`; GPU peak ~9GB.
@@ -376,6 +570,13 @@
 2. Optional: full 14-page OCR re-run with new TABLE_ROUTER + `--check-compile`
 3. Homelab follow-ups (still uncommitted under `homelab/`)
 
+## 2026-07-26 — Quality gate TDD + GitHub hybrid
+- Listed open issues (#1 PR draft, #2 N-up smoke); created #4 core + #3 wiring
+- Copilot assign failed (`Bot does not have access`); implemented both locally with TDD
+- `uv run pytest` quality+ingest gate suites green; ruff --fix on touched tests/batch_export
+- ohm: type hints A; complexity flag on `build_quality_report` (defer extract — covered by tests)
+- Spec approved + code uncommitted pending user commit ask
+
 ## 2026-07-25 — nup-v2 hang → EOS harden → resume
 - Died mid Stage2 (~2h, ~45s/block). Timing ≈ full 1024-token burn; stub prompt reproduced `!` wall; real prompts now early-stop.
 - Fix: prefer `generation_config.eos_token_id` list; WARN on near-max `n_new`. Tests 9 passed.
@@ -448,3 +649,61 @@ Via `npx skills add … -g -a cursor -y --copy` → `~/.agents/skills`, then cop
 - Reviewed the updated design at `~/.gstack/projects/pdf-scaner/a1217-main-design-20260722-210437.md`.
 - Iteration-1 changes are present: Tailnet/API-key posture, DONE contract, Samba-only, A-side embedding, Snapshot API, MCP read-only guidance, Wave-2 gates, and B resource budget.
 - Remaining blockers are documented in `findings.md`: atomic sync/publication, precise manifest/key/backup/network implementation contracts, Qdrant Point-ID validity, and A-side resource controls.
+## 2026-07-29 — Cross-year error.txt debugging start
+
+- Read `handoff_ocr.md`, planning files, and user-reviewed `error.txt`.
+- Replayed region detection from saved `.lines.json`; no GPU/VLM run.
+- Generated 14 affected-page overlays under `output/missing_question_overlays/`.
+- TDD RED command: `uv run python -m pytest tests/test_dse_mcq_region.py tests/test_mcq_stage3_sanitize.py -q`
+  → **4 failed, 23 passed**, each failure matches one confirmed root cause.
+- TDD GREEN: regioner/prompt focused suite **27 passed**.
+- Rebuilt affected layouts from saved lines in foreground; every 2012--2023 layout
+  now has exactly Q1--Q45, no duplicate qids.
+- Visual post-fix checks: 2020 Q8--Q11 and 2017 Q31/Q32 boundaries are correct.
+- modern-python: Ruff pass, ty pass, full pytest **247 passed** (one external
+  Surya/Pydantic deprecation warning).
+- Aligned `PipelineManager(nup_enabled=False)` with locked YAML/handoff behavior;
+  this resolved two pre-existing full-suite failures.
+- VLM OCR was not rerun; old txt/jsonl remain unchanged pending user overlay review.
+- User overlay follow-up: repaired orphan crop left gutter and page-leading top
+  bound; refreshed 2017/2018/2020/2021 layouts and fixed overlays.
+- Visual checks now include full qids/stems for 2017 Q4, 2018 Q4/Q7,
+  2020 Q1/Q4/Q7/Q37, and 2021 Q4/Q8.
+- Final verification after bbox follow-up: Ruff pass, ty pass, full pytest
+  **248 passed** (same external Surya/Pydantic warning).
+
+## 2026-07-29 — 2022 Q1/Q5 and 2021 Q40 overlay refresh
+
+- Read-only replay showed current bboxes at x1=197 for 2022 Q1 and x1=152 for
+  Q5, aligned within 0--3 px of the other questions on each page.
+- Rebuilt the 2022 layout visibly from cached RapidOCR lines: **4.03 seconds**,
+  **45/45**, **0 incomplete**; no VLM/Stage2 run.
+- Refreshed fixed overlays for 2022 Q1/Q5 and 2021 Q40. Visual inspection
+  confirms all three printed qids are inside their question boxes.
+- Root cause was stale generated artifacts. No regioner change was needed.
+  Retained the broad right edge to avoid clipping diagrams/right-side choices.
+
+## 2026-07-29 — Instructor structured MCQ Stage2 shadow mode
+
+- Confirmed the trunk uses direct local Transformers `model.generate()`;
+  Instructor cannot patch it. Preserved Qwen3-VL 4-bit as the official Stage2
+  path.
+- Added Pydantic v2 `McqOcrResult` with exact A--D choices, visible figure
+  labels, uncertain tokens, warnings, and deterministic review flag.
+- Added optional OpenAI-compatible `instructor.from_provider` backend with at
+  most one validation retry. Default remains disabled and shadow mode true.
+- `question_id` is excluded from the schema and supplied only to deterministic
+  `render_text()` from Stage1 block metadata.
+- `questions.jsonl` keeps legacy `text` and adds nullable `structured_ocr`;
+  incomplete Q1--Q45 coverage now emits a pipeline warning without blocking
+  partial draft/smoke runs.
+- TDD RED: missing `ocr_pipeline.mcq_structured`; GREEN: 14/14 new tests.
+- Verification: 40 focused regressions and full pytest **262 passed**; Ruff and
+  ty pass. The only full-suite warning is the existing external
+  Surya/Pydantic class-config deprecation.
+
+## 2026-07-29 — Python cleanup
+
+- Removed approved one-off, superseded, legacy `draft.jsonl`, and GLM Python paths.
+- Removed dead compatibility aliases and the no-op `polish_per_page` API/config.
+- Updated active docs and tests; retained N-up and configured optional OCR engines.

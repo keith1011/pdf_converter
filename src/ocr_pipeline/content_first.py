@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -10,23 +11,30 @@ from .formula_integrity import check_math_body
 from .models import BBox, ContentSegment, PageIR, SegmentKind
 from .segmenter import segment_stitched_page
 
+_QID_OPENER = re.compile(r"^(\d{1,2})[\.．]\s*")
+
 
 def render_page_ir(page: PageIR) -> tuple[str, str]:
     """Linear txt and tex_body from PageIR segments (no tabular)."""
     lines: list[str] = []
     for seg in page.segments:
         if seg.kind is SegmentKind.PROSE:
-            lines.append(seg.text)
+            text = seg.text
         elif seg.kind is SegmentKind.MATH:
             body = _math_body_for_render(seg.text)
-            if body:
-                lines.append(f"${body}$")
+            text = f"${body}$" if body else ""
         elif seg.kind is SegmentKind.MARK_NOTE:
-            lines.append(f"(分註: {seg.text})")
+            text = f"(分註: {seg.text})"
         elif seg.kind is SegmentKind.FIGURE:
-            lines.append(f"(圖: {seg.text})")
+            text = f"(圖: {seg.text})"
         else:
-            lines.append(seg.text)
+            text = seg.text
+        if not text:
+            continue
+        # Preserve MCQ question boundaries the segmenter drops (empty lines).
+        if lines and _QID_OPENER.match(text.strip()):
+            lines.append("")
+        lines.append(text)
     joined = "\n".join(lines)
     return joined, joined
 
@@ -165,5 +173,22 @@ def finalize_content_first(
     txt_path.write_text(full_txt, encoding="utf-8")
     tex_path.write_text(full_tex, encoding="utf-8")
     write_pageir_json(pageir_path, pages_ir)
+
+    from .quality import build_quality_report, write_quality_json
+
+    pageir_payload = json.loads(pageir_path.read_text(encoding="utf-8"))
+    quality_report = build_quality_report(pageir_payload, doc_id=source)
+    quality_path = output_dir / f"{source}.quality.json"
+    write_quality_json(quality_path, quality_report)
+    print(
+        f"[Quality] verdict={quality_report['verdict']} "
+        f"pct_le3={quality_report['pct_le3']} pct_ge20={quality_report['pct_ge20']} "
+        f"admitted_est={quality_report['pct_admitted_est']} -> {quality_path.name}",
+        flush=True,
+    )
+    if quality_report["fail_reasons"]:
+        all_warnings.append("quality fail: " + ",".join(quality_report["fail_reasons"]))
+    elif quality_report.get("warn_reasons"):
+        all_warnings.append("quality warn: " + ",".join(quality_report["warn_reasons"]))
 
     return full_txt, full_tex, txt_path, tex_path, pageir_path, all_warnings

@@ -50,6 +50,45 @@ TEXT_ROUTER_PROMPT = f"""請提取圖片中的全部文字，保持繁體中文�
 """
 
 
+# DSE Paper2 MCQ crop (Stage2): Qwen3-VL prefers short OCR-style prompts
+# (see Qwen3-VL cookbooks: "Read all the text in the image.") over long Qwen2.5 rule sheets.
+MCQ_ROUTER_PROMPT = """請依閱讀順序，輸出這張選擇題裁切圖中的全部可見文字。
+
+要求：
+- 包含題號、題幹、以及圖中可見的 A B C D 選項（不可省略選項）。
+- 保持繁體中文；公式用 $...$。
+- 貨幣金額前的 dollar sign 是可見文字，必須逐一輸出為 LaTeX literal \\$（例如 A. \\$88），不可省略或當成公式 delimiter。
+- 公式中的底數、指數、分子、分母及符號須逐一照圖抄錄；不可化簡、補全或改寫。
+- 不要解題、不要推導、不要寫「故／因此／答案」。
+- 題幹與選項之間不要空行；選項各一行：A. … / B. … / C. … / D. …
+- 只輸出正文，不要說明或 markdown。
+"""
+
+
+MCQ_POLISH_PROMPT = f"""你是 OCR 草稿校對員（不是解題老師）。請將以下「單題 MCQ 草稿」輕量修正為可排版文字。
+
+{LATEX_MATH_RULES}
+
+【MCQ 硬性規則 — 全部必須遵守】
+1. 禁止解題、推導、驗算、展開；禁止新增「故／因此／答案為／選項為」等解題句。
+2. 不要發明草稿沒有的內容；只修正明顯 OCR 錯字與破碎 LaTeX。
+3. 必須保留題號與 A–D 四個選項（若草稿已有）；禁止刪選項、禁止只留題幹。
+4. 選項格式維持「A. …」「B. …」「C. …」「D. …」；可把「A.」與內容併回同一行；題幹與選項間不要空行。
+5. 禁止把選擇題改寫成計算步驟或證明。
+6. 文件可用 \\documentclass[12pt]{{ctexart}} + amsmath；或至少輸出 document body。
+7. <<<TEX>>> 內禁止 markdown 圍欄與前後說明。
+
+請嚴格用下列標記輸出兩段（不要其他說明）：
+
+<<<TXT>>>
+（純文本；公式用 $...$；保留題號與 A–D；無解題）
+<<<TEX>>>
+（完整可編譯 LaTeX document，或至少 \\begin{{document}}...\\end{{document}} 內正文）
+
+草稿：
+"""
+
+
 TABLE_ROUTER_PROMPT = f"""請將圖片中的「評分表／解題表」轉成直式一行一步的純文字（內容優先）。
 保持繁體中文與英文原貌。
 
@@ -61,30 +100,6 @@ TABLE_ROUTER_PROMPT = f"""請將圖片中的「評分表／解題表」轉成直
 3. 依閱讀順序逐行輸出：解題步驟、公式、分數註記（如 1M、1A）各佔一行。
 4. 公式用 $...$；禁止把「分」「備註」「1M」「1A」寫進數學模式。
 5. 不加任何解釋、標題或 markdown 圍欄。
-"""
-
-
-POLISH_PROMPT_HEADER_LEGACY = f"""你是一個 LaTeX 排版專家。請將以下草稿內容修正並排版。
-
-{LATEX_MATH_RULES}
-
-其他要求：
-1. 繁體中文流暢；修正明顯 OCR 錯字；不要發明草稿沒有的內容。
-2. Markdown 表格轉成 LaTeX tabular（可用 booktabs）。
-3. 文件用 \\documentclass[12pt]{{ctexart}}，並 \\usepackage{{amsmath,amssymb,booktabs}}。
-4. 不要輸出 <|end_of_box|> 或其他特殊 token。
-5. 正文塊級公式用 $$...$$；行內用 $...$；tabular 儲存格內只用 $...$，禁止 $$。
-6. 殘留 HTML（如 <br>）轉成 LaTeX（表內用 \\\\，表外用空行）。
-7. <<<TEX>>> 內只輸出完整 LaTeX 源碼，禁止 markdown 圍欄（```）與前後說明文字。
-
-請嚴格用下列標記輸出兩段（不要其他說明）：
-
-<<<TXT>>>
-（純文本；其中公式仍須是標準 LaTeX，可用 $...$ / $$...$$；表內只用 $）
-<<<TEX>>>
-（完整可編譯 LaTeX：preamble + \\begin{{document}}...\\end{{document}}）
-
-草稿：
 """
 
 
@@ -112,9 +127,6 @@ CONTENT_FIRST_POLISH_PROMPT = f"""你是一個 LaTeX 排版專家。請將以下
 
 草稿：
 """
-
-# Ship 1: content-first is the active polish header.
-POLISH_PROMPT_HEADER = CONTENT_FIRST_POLISH_PROMPT
 
 FIGURE_CAPTION_PROMPT = """你正在看一張試卷／講義中的圖（圖表、幾何圖、函數圖像、示意圖）。
 

@@ -73,8 +73,7 @@ def find_best_vertical_split(image_path: Path) -> tuple[float, float]:
 
 def _projections(im: Image.Image) -> tuple[list[float], list[float]]:
     w, h = im.size
-    flat = getattr(im, "get_flattened_data", None)
-    pixels = list(flat() if flat is not None else im.getdata())
+    pixels = im.tobytes()
     ink = [1.0 if p < _INK_THRESHOLD else 0.0 for p in pixels]
     v_proj = [0.0] * w
     h_proj = [0.0] * h
@@ -148,9 +147,3 @@ def _band_mean(proj: list[float], lo: int, hi: int) -> float | None:
     if not band:
         return None
     return sum(band) / len(band)
-
-
-# Back-compat alias used by older debug scripts / tests
-def _mid_split_score(proj: list[float]) -> float:
-    score, _ = _best_split_on_proj(proj)
-    return score

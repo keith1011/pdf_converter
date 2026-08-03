@@ -7,7 +7,12 @@ import time
 from pathlib import Path
 
 from .models import BlockType, LayoutBlock
-from .prompts import MATH_ROUTER_PROMPT, TABLE_ROUTER_PROMPT, TEXT_ROUTER_PROMPT
+from .prompts import (
+    MATH_ROUTER_PROMPT,
+    MCQ_ROUTER_PROMPT,
+    TABLE_ROUTER_PROMPT,
+    TEXT_ROUTER_PROMPT,
+)
 
 
 def normalize_display_math(text: str) -> str:
@@ -34,12 +39,9 @@ class MathRouter:
         formula_engine=None,
         vlm_fallback=None,
         max_new_tokens: int | None = None,
-        # Deprecated alias (call-site compat). Prefer ``vlm_fallback``.
-        glm_fallback=None,
     ):
         self.formula_engine = formula_engine
-        self.vlm_fallback = vlm_fallback if vlm_fallback is not None else glm_fallback
-        self.glm_fallback = self.vlm_fallback  # back-compat attribute
+        self.vlm_fallback = vlm_fallback
         self.max_new_tokens = max_new_tokens
 
     def extract_latex(self, crop_path: Path) -> str:
@@ -74,33 +76,91 @@ class TextRouter:
         text_engine=None,
         table_engine=None,
         max_new_tokens: int | None = None,
+        structured_ocr_client=None,
+        structured_ocr_shadow_mode: bool = True,
+        local_mcq_validation_enabled: bool = True,
     ):
         self.vlm = vlm
         self.model_name = model_name
         self.text_engine = text_engine
         self.table_engine = table_engine
         self.max_new_tokens = max_new_tokens
+        self.structured_ocr_client = structured_ocr_client
+        self.structured_ocr_shadow_mode = structured_ocr_shadow_mode
+        self.local_mcq_validation_enabled = local_mcq_validation_enabled
 
-    def _prompt_for(self, block_type: BlockType) -> str:
-        if block_type == BlockType.TABLE:
+    def _prompt_for(self, block: LayoutBlock) -> str:
+        if isinstance(block.meta.get("question_id"), int):
+            return MCQ_ROUTER_PROMPT
+        if block.block_type == BlockType.TABLE:
             return TABLE_ROUTER_PROMPT
         return TEXT_ROUTER_PROMPT
 
     def process(self, block: LayoutBlock) -> LayoutBlock:
         assert block.crop_path is not None
+        prompt = self._prompt_for(block)
         engine = self.table_engine if block.block_type == BlockType.TABLE else self.text_engine
         if engine is not None:
-            block.raw_text = engine.ocr(block.crop_path)
-            return block
-        if self.vlm is None:
-            raise RuntimeError("No text engine available")
-        prompt = self._prompt_for(block.block_type)
-        block.raw_text = self.vlm.generate(
-            prompt,
-            image_path=block.crop_path,
-            max_new_tokens=self.max_new_tokens,
-        ).strip()
+            # Prefer per-block prompt (MCQ vs text) when the engine accepts it.
+            try:
+                block.raw_text = engine.ocr(block.crop_path, prompt=prompt)
+            except TypeError:
+                block.raw_text = engine.ocr(block.crop_path)
+        else:
+            if self.vlm is None:
+                raise RuntimeError("No text engine available")
+            block.raw_text = self.vlm.generate(
+                prompt,
+                image_path=block.crop_path,
+                max_new_tokens=self.max_new_tokens,
+            ).strip()
+        self._attach_local_mcq_validation(block)
+        self._attach_mcq_structured_ocr(block, prompt)
         return block
+
+    def _attach_local_mcq_validation(self, block: LayoutBlock) -> None:
+        if not self.local_mcq_validation_enabled:
+            return
+        question_id = block.meta.get("question_id")
+        if not isinstance(question_id, int):
+            return
+        from .mcq_structured import parse_stage2_text, render_text
+
+        try:
+            result = parse_stage2_text(block.raw_text or "")
+        except Exception as exc:
+            block.meta["structured_ocr"] = None
+            block.meta["structured_ocr_source"] = "local_stage2"
+            block.meta["structured_ocr_error"] = type(exc).__name__
+            return
+        block.meta["structured_ocr"] = result.model_dump(mode="json")
+        block.meta["structured_ocr_source"] = "local_stage2"
+
+        block.raw_text = render_text(question_id, result)
+
+    def _attach_mcq_structured_ocr(self, block: LayoutBlock, prompt: str) -> None:
+        question_id = block.meta.get("question_id")
+        client = self.structured_ocr_client
+        if not isinstance(question_id, int) or client is None:
+            return
+
+        from .mcq_structured import McqOcrResult, render_text
+
+        try:
+            result = McqOcrResult.model_validate(
+                client.extract(prompt=prompt, image_path=block.crop_path)
+            )
+        except Exception as exc:
+            block.meta["structured_ocr"] = None
+            block.meta["structured_ocr_error"] = type(exc).__name__
+            if self.structured_ocr_shadow_mode:
+                return
+            raise
+
+        block.meta["structured_ocr"] = result.model_dump(mode="json")
+        block.meta["structured_ocr_shadow"] = self.structured_ocr_shadow_mode
+        if not self.structured_ocr_shadow_mode:
+            block.raw_text = render_text(question_id, result)
 
 
 class DynamicRouter:

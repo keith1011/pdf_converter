@@ -1,7 +1,5 @@
 """
-New OCR entrypoint (Surya + dynamic routing + VlmClient).
-
-Legacy path remains: extract_questions.py / run_extract_pipeline.py
+OCR entrypoint (MinerU layout + dynamic routing + Qwen VLM).
 
 Usage:
   .\\.venv\\Scripts\\python.exe run_ocr_pipeline.py data\\sources\\123.pdf
@@ -31,15 +29,9 @@ from ocr_pipeline.factory import build_default_pipeline, load_ocr_config
 
 def build_parser(pipe_cfg: dict | None = None) -> argparse.ArgumentParser:
     pipe_cfg = pipe_cfg or {}
-    parser = argparse.ArgumentParser(description="Surya + VlmClient OCR pipeline -> .txt + .tex")
+    parser = argparse.ArgumentParser(description="MinerU + Qwen OCR pipeline -> .txt + .tex")
     parser.add_argument("pdf", type=Path, help="PDF path")
     parser.add_argument("--limit", type=int, default=0, help="Only first N pages (0=all)")
-    parser.add_argument(
-        "--polish-per-page",
-        action="store_true",
-        default=bool(pipe_cfg.get("polish_per_page", False)),
-        help="Deprecated no-op: content-first always polishes each page",
-    )
     parser.add_argument(
         "--reuse-images",
         action="store_true",
@@ -94,7 +86,6 @@ def main() -> None:
         result = manager.run(
             args.pdf,
             limit=args.limit,
-            polish_per_page=args.polish_per_page,
             overwrite=overwrite,
             reuse_layout=reuse_layout,
             single_instance_lock=lock_enabled,

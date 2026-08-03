@@ -37,7 +37,7 @@ def test_unpaired_dollar_todo_stays_inside_document():
     assert 0 <= todo < end
 
 
-def test_polish_per_page_prints_stage3_start_once(monkeypatch, tmp_path: Path):
+def test_pipeline_prints_stage3_start_once(monkeypatch, tmp_path: Path):
     """DR2=B: one Stage3 line even when polishing multiple pages."""
     calls: list[str] = []
 
@@ -93,7 +93,7 @@ def test_polish_per_page_prints_stage3_start_once(monkeypatch, tmp_path: Path):
         output_dir=out,
         pages_dir=pages,
     )
-    mgr.run(pdf, polish_per_page=True, overwrite=True, warns=WarnCollector())
+    mgr.run(pdf, overwrite=True, warns=WarnCollector())
     assert calls == ["stage3"], f"expected one Stage3 start, got {calls!r}"
 
 

@@ -1,7 +1,8 @@
-"""VLM client seam: swappable Qwen / GLM adapters (same generate() API)."""
+"""Qwen VLM client used by the OCR pipeline."""
 
 from __future__ import annotations
 
+from contextlib import suppress
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -29,10 +30,6 @@ def resize_image(image: Any, max_pixels: int) -> Any:
     return image
 
 
-# Back-compat alias used by older call sites / tests
-_resize = resize_image
-
-
 def strip_fences(text: str) -> str:
     text = (text or "").strip()
     if text.startswith("```"):
@@ -41,9 +38,6 @@ def strip_fences(text: str) -> str:
         text = re.sub(r"^```(?:\w+)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
     return text.strip()
-
-
-_strip_fences = strip_fences
 
 
 def resolve_stop_token_ids(processor: Any, model: Any) -> dict[str, Any]:
@@ -90,10 +84,8 @@ def force_greedy_generation_config(model: Any) -> None:
     gc.do_sample = False
     for key in ("temperature", "top_p", "top_k"):
         if hasattr(gc, key):
-            try:
+            with suppress(Exception):
                 setattr(gc, key, None)
-            except Exception:
-                pass
 
 
 def build_generation_kwargs(
@@ -131,7 +123,7 @@ def run_vlm_generate(
     max_new_tokens: int,
     temperature: float,
 ) -> str:
-    """Shared chat-template → greedy generate → decode path for Qwen/GLM."""
+    """Shared chat-template → greedy generate → decode path for Qwen clients."""
     content: list[dict] = []
     pil_image = None
     if image_path is not None:
@@ -205,12 +197,12 @@ def run_vlm_generate(
     return text
 
 
-class Qwen25VlClient:
-    """Qwen2.5-VL-Instruct (default 4bit) for RTX 4070 Super 12GB."""
+class QwenVlClient:
+    """Qwen2.5-VL / Qwen3-VL Instruct (default 4bit) for RTX 4070 Super 12GB."""
 
     def __init__(
         self,
-        model_name: str = "Qwen/Qwen2.5-VL-7B-Instruct",
+        model_name: str = "Qwen/Qwen3-VL-8B-Instruct",
         *,
         load_in_4bit: bool = True,
         max_new_tokens: int = 2048,
@@ -224,6 +216,49 @@ class Qwen25VlClient:
         self.max_pixels = max_pixels
         self.model = None
         self.processor = None
+
+    @staticmethod
+    def _load_causal_vlm(model_name: str, model_kwargs: dict) -> Any:
+        """Prefer the matching Qwen VL class; fall back for older checkpoints."""
+        name = model_name.lower()
+        if "qwen3-vl" in name or "qwen3_vl" in name:
+            try:
+                from transformers import Qwen3VLForConditionalGeneration
+
+                return Qwen3VLForConditionalGeneration.from_pretrained(
+                    model_name, **model_kwargs
+                )
+            except Exception:
+                pass
+        if "qwen2.5-vl" in name or "qwen2_5_vl" in name:
+            try:
+                from transformers import Qwen2_5_VLForConditionalGeneration
+
+                return Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                    model_name, **model_kwargs
+                )
+            except Exception:
+                pass
+        try:
+            from transformers import Qwen3VLForConditionalGeneration
+
+            return Qwen3VLForConditionalGeneration.from_pretrained(
+                model_name, **model_kwargs
+            )
+        except Exception:
+            pass
+        try:
+            from transformers import Qwen2_5_VLForConditionalGeneration
+
+            return Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                model_name, **model_kwargs
+            )
+        except Exception:
+            from transformers import AutoModelForImageTextToText
+
+            return AutoModelForImageTextToText.from_pretrained(
+                model_name, **model_kwargs
+            )
 
     def load(self) -> None:
         if self.model is not None:
@@ -248,18 +283,7 @@ class Qwen25VlClient:
         else:
             model_kwargs["torch_dtype"] = torch.bfloat16
 
-        try:
-            from transformers import Qwen2_5_VLForConditionalGeneration
-
-            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                self.model_name, **model_kwargs
-            )
-        except Exception:
-            from transformers import AutoModelForImageTextToText
-
-            self.model = AutoModelForImageTextToText.from_pretrained(
-                self.model_name, **model_kwargs
-            )
+        self.model = self._load_causal_vlm(self.model_name, model_kwargs)
         self.model.eval()
         force_greedy_generation_config(self.model)
 
@@ -285,34 +309,46 @@ class Qwen25VlClient:
 
 
 def build_vlm_client(cfg: dict | None = None) -> VlmClient:
-    """
-    Build VLM from config.
-
-    Prefer `vlm:` block (backend: qwen|glm). If missing, fall back to legacy `glm:`.
-    """
+    """Build the Qwen VLM from config."""
     cfg = cfg or {}
     vlm_cfg = dict(cfg.get("vlm") or {})
-    glm_cfg = dict(cfg.get("glm") or {})
-    backend = str(vlm_cfg.get("backend") or ("qwen" if vlm_cfg else "glm")).lower()
+    backend = str(vlm_cfg.get("backend", "qwen")).lower()
+    if backend != "qwen":
+        raise ValueError(f"Unknown VLM backend: {backend}")
 
-    if backend == "glm":
-        from .glm_client import Glm46VFlashClient
+    return QwenVlClient(
+        model_name=str(vlm_cfg.get("model_name", "Qwen/Qwen3-VL-8B-Instruct")),
+        load_in_4bit=bool(vlm_cfg.get("load_in_4bit", True)),
+        max_new_tokens=int(vlm_cfg.get("max_new_tokens", 2048)),
+        temperature=float(vlm_cfg.get("temperature", 0.0)),
+        max_pixels=int(vlm_cfg.get("max_pixels", 1003520)),
+    )
 
-        src = {**glm_cfg, **{k: v for k, v in vlm_cfg.items() if k != "backend"}}
-        return Glm46VFlashClient(
-            model_name=str(src.get("model_name", "zai-org/GLM-4.6V-Flash")),
-            load_in_4bit=bool(src.get("load_in_4bit", True)),
-            max_new_tokens=int(src.get("max_new_tokens", 2048)),
-            temperature=float(src.get("temperature", 0.0)),
-            max_pixels=int(src.get("max_pixels", 1003520)),
-        )
 
-    # default: qwen
-    src = {**vlm_cfg}
-    return Qwen25VlClient(
-        model_name=str(src.get("model_name", "Qwen/Qwen2.5-VL-7B-Instruct")),
-        load_in_4bit=bool(src.get("load_in_4bit", True)),
-        max_new_tokens=int(src.get("max_new_tokens", 2048)),
-        temperature=float(src.get("temperature", 0.0)),
-        max_pixels=int(src.get("max_pixels", 1003520)),
+def build_mcq_structured_client(
+    cfg: dict | None = None,
+    *,
+    default_model_name: str = "Qwen/Qwen3-VL-8B-Instruct",
+):
+    """Build the optional OpenAI-compatible Instructor backend.
+
+    This does not patch or replace the local Transformers Qwen client.
+    """
+    src = dict(cfg or {})
+    if not bool(src.get("enabled", False)):
+        return None
+    backend = str(src.get("backend", "instructor_openai")).strip().lower()
+    if backend != "instructor_openai":
+        raise ValueError(f"Unknown structured OCR backend: {backend}")
+
+    from .mcq_structured import InstructorMcqOcrClient
+
+    model_name = str(src.get("model_name") or default_model_name)
+    provider = str(src.get("provider") or f"openai/{model_name}")
+    return InstructorMcqOcrClient(
+        provider=provider,
+        model_name=model_name,
+        base_url=str(src.get("base_url") or "") or None,
+        api_key_env=str(src.get("api_key_env") or "") or None,
+        max_validation_retries=int(src.get("max_validation_retries", 1)),
     )

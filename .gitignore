@@ -2,6 +2,7 @@
 .venv/
 .venv-engines312/
 .venv-mineru312/
+.venv-arabic-ocr/
 venv*/
 __pycache__/
 *.py[cod]

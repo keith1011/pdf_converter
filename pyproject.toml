@@ -15,11 +15,14 @@ dependencies = [
     "accelerate>=0.33.0",
     "bitsandbytes>=0.43.0",
     "filetype>=1.2",
+    "instructor>=1.15.4",
+    "openai>=2.48.0",
     "opencv-python-headless>=4.8",
     "pillow>=10.0.0",
     "platformdirs>=4.0",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
+    "pylatexenc>=2.10",
     "pymupdf>=1.28.0",
     "pypdfium2>=4.30",
     "python-dotenv>=1.0",
@@ -103,8 +106,6 @@ ignore = [
 "tests/**" = ["S101"]
 "run_ocr_pipeline.py" = ["E402"]
 "arrange_only.py" = ["E402"]
-"extract_questions.py" = ["E402"]
-"run_extract_pipeline.py" = ["E402"]
 "homelab/**" = ["E402", "T20"]
 
 [tool.ruff.format]
