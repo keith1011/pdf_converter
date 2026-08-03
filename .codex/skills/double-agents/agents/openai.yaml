@@ -1,0 +1,4 @@
+interface:
+  display_name: "Double Agents"
+  short_description: "Sol directs; Luna executes low-reasoning token-heavy work"
+  default_prompt: "Use $double-agents: keep reasoning and integration with sol-high; delegate only bounded, mechanical, verifiable, token-heavy work to luna_max; use compact reports and limited auto-review."
