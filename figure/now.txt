@@ -52,6 +52,6 @@ Useful verification
 - uv run ruff check 2_生產線/src/figure_pipeline
 
 Git state at handoff
-- HEAD: 62f71c8e chore: classify figure workspace files
-- Figure B3 changes are staged for a pending commit. Confirm the staged path
-  list before committing; leave unrelated AIbuliding changes untouched.
+- HEAD: 13f9e955 feat: complete figure B3 visible-label OCR pipeline
+- Figure B3 code, tests, handoff docs and now.txt are committed. Unrelated
+  AIbuliding changes remain outside this commit and may still be staged.
