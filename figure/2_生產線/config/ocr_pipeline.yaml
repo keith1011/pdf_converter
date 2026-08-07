@@ -79,3 +79,8 @@ figure_classification:
   enabled: true
   max_new_tokens: 256
   prompt_version: "figure-b2-v1"
+
+figure_label_ocr:
+  enabled: true
+  max_new_tokens: 384
+  prompt_version: "figure-b3-v3"

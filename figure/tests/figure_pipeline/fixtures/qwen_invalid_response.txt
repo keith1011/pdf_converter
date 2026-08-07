@@ -1,3 +1,0 @@
-```json
-{"visual_family": "geometry", "subtype": "not-a-real-subtype"}
-```

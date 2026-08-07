@@ -64,9 +64,14 @@ def _source_proposal_id(asset_dir: Path) -> str:
         (asset_dir / "figure_asset.json").read_text(encoding="utf-8")
     )
     proposal = asset.classification.proposed
-    if proposal is None:
-        _usage_error("review requires a pending B2 proposal")
-    return f"{asset.asset_id}:{proposal.prompt_version}"
+    prompt_version = (
+        proposal.prompt_version
+        if proposal is not None
+        else asset.classification.prompt_version
+    )
+    if prompt_version is None:
+        _usage_error("review requires a B2 proposal prompt version")
+    return f"{asset.asset_id}:{prompt_version}"
 
 
 def _run_propose(args: argparse.Namespace) -> int:

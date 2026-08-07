@@ -1,20 +1,32 @@
-# Analysis and results stage
+# Analyze results
 
-Purpose: store and review outputs produced by collection and production.
+Use this guide for output review, evaluation, benchmarks, reports, handoffs, and
+documentation.
 
-Contents:
+## Skill routing
 
-- `3.分析結果/output/`: OCR, PageIR, Figure B1/B2 bundles, overlays, and logs.
-- `3.分析結果/evals/`: evaluation and scorecard material.
-- `3.分析結果/docs/`: handoffs, progress, specifications, and test-harness audits.
-- `3.分析結果/reports/`: root-level findings, progress, handoff, debug, and TODO reports.
-- `3.分析結果/qdrant_storage/`: local Qdrant runtime storage.
-- `3.分析結果/_opencode_export/`: immutable historical export snapshot.
-- `3.分析結果/_scripts/`: report validation/revision placeholders.
+Use only what the task needs:
 
-Rules:
+- `qa-only`: read-only inspection and evidence-backed findings.
+- `qa`: validation plus fixes when changes are authorized.
+- `benchmark` or `benchmark-models`: performance or model comparison.
+- `code-review-skill`: review production changes before acceptance.
+- `document-generate`: create or update structured reports and handoffs.
+- `pdf:pdf`: inspect PDF result artifacts.
 
-1. Treat artifacts as reviewable results; do not edit source PDFs here.
-2. Use `____validate_report.js` and `____revise_report.js` as report-stage hooks.
-3. Figure B2 review status belongs in the generated bundle under `output/` and
-   must not be silently changed in prose-only reports.
+Read the selected skill before acting.
+
+## Workflow
+
+1. Inspect evidence under `output/` and evaluation material under `evals/`.
+2. Keep reproducible measurements, commands, and source artifact paths in the
+   report.
+3. Put reports and handoffs under `reports/` or `docs/`; use `_scripts/` for
+   repeatable validation and revision.
+4. Record Figure B2 review state in its generated bundle under `output/`, not
+   only in prose.
+5. Send required code/config changes back to `2_生產線/` and source-data issues
+   back to `1_收集資料/`.
+
+Do not edit source PDFs here. Treat `qdrant_storage/` as runtime state and
+`_opencode_export/` as an immutable historical snapshot.

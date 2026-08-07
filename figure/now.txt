@@ -1,0 +1,57 @@
+FIGURE TRACK NOW — 2026-08-07
+
+Audience: Claude Code using a local LLM.
+
+Workspace
+- Repository: C:\Users\a1217\OneDrive\桌面\aiworkplace\figure
+- This is the Figure line. Keep changes inside this workspace unless the task
+  explicitly says otherwise.
+- Run commands from the workspace root.
+
+Current local-LLM pipeline
+- Layout/detection: MinerU.
+- Figure OCR/classification: local Qwen/Qwen3-VL-8B-Instruct, 4-bit,
+  crop-only inference. Use one GPU worker at a time.
+- B1 preserves the source question crop, figure crop, bbox and SHA-256.
+- B2 classifies the figure family/subtype. It uses strict JSON plus explicit
+  human review; the Q18 failed proposal was manually corrected and preserved.
+- B3 extracts visible labels. The current default is prompt version
+  figure-b3-v3. figure-b3-v1 and figure-b3-v2 remain readable for old
+  artifacts. B3 artifact schema stays 1.2 and pipeline_version stays
+  figure-b3-v1.
+
+What is complete
+- B1/B2/B3 code, strict Pydantic models, parser, runner and review CLI are in
+  2_生產線/.
+- Six-shape B3 benchmark completed. v3: 6/6 parseable, 34 TP / 0 FP / 0 FN,
+  micro F1 100%; all six proposals were human-checked and approved unchanged.
+- v2 evidence is retained: one 2014 sample degenerated into exclamation marks
+  and was not accepted as the current prompt.
+- Tests: 171 Figure pipeline tests passed. Ruff passed.
+- Reports and handoff: 3.分析結果/docs/ and
+  3.分析結果/reports/figure_pipeline/.
+- Machine-readable comparison:
+  3.分析結果/output/figure_pipeline/benchmark/b3-prompt-comparison.json
+  (output/ is runtime/ignored state; do not delete it).
+
+Important rules
+- A model proposal is never ground truth. Every valid proposal stays pending
+  until explicit human review; manual edits are status corrected.
+- Do not mutate B1/B2 source bundles or overwrite an existing output bundle.
+- Do not treat the vector database as model training.
+- Embeddings, Qdrant ingest, retrieval and answer reasoning are not implemented
+  for the Figure line yet.
+
+Next step
+1. Add more holdout figures, especially non-geometry samples.
+2. Define and separately score sequence/order accuracy.
+3. If the holdout remains green, design B4 structured figure/table analysis.
+
+Useful verification
+- uv run python -m pytest 2_生產線/tests/figure_pipeline -q -p no:cacheprovider
+- uv run ruff check 2_生產線/src/figure_pipeline
+
+Git state at handoff
+- HEAD: 62f71c8e chore: classify figure workspace files
+- Figure B3 changes are staged for a pending commit. Confirm the staged path
+  list before committing; leave unrelated AIbuliding changes untouched.

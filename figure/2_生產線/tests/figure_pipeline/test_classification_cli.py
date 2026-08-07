@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import figure_pipeline.classification_cli as cli_module
 import pytest
-from figure_pipeline.classification_cli import main
 
+import figure_pipeline.classification_cli as cli_module
+from figure_pipeline.classification_cli import main
 from tests.figure_pipeline.test_classification_review import (
     load_asset,
+    make_failed_b2_bundle,
     make_pending_b2_bundle,
     proposal_id,
 )
@@ -173,6 +174,90 @@ def test_cli_rejected_review_skips_model_and_uses_unknown_defaults(
     assert reviewed.secondary_tags == []
     assert reviewed.source_proposal_id == proposal_id(source_dir)
     assert asset.figure_type == "unknown"
+
+
+@pytest.mark.parametrize(
+    ("status", "labels", "visual_family", "subtype"),
+    [
+        (
+            "corrected",
+            ["--visual-family", "geometry", "--subtype", "triangle"],
+            "geometry",
+            "triangle",
+        ),
+        ("rejected", [], "unknown", "unclassified"),
+    ],
+)
+def test_cli_failed_source_publishes_corrected_or_rejected_without_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    status: str,
+    labels: list[str],
+    visual_family: str,
+    subtype: str,
+) -> None:
+    source_dir = make_failed_b2_bundle(tmp_path)
+    destination = tmp_path / f"failed-{status}"
+
+    def fail_if_model_is_built(cfg: dict[str, object] | None = None) -> None:
+        raise AssertionError(f"review must not build a model: {cfg}")
+
+    monkeypatch.setattr(cli_module, "build_vlm_client", fail_if_model_is_built)
+
+    exit_code = main(
+        [
+            "review",
+            "--asset",
+            str(source_dir),
+            "--out",
+            str(destination),
+            "--reviewer",
+            "human-failed-cli",
+            "--status",
+            status,
+            *labels,
+        ]
+    )
+
+    assert exit_code == 0
+    asset = load_asset(destination)
+    reviewed = asset.classification.reviewed
+    assert reviewed is not None
+    assert asset.classification.status == status
+    assert asset.figure_type == visual_family
+    assert reviewed.visual_family == visual_family
+    assert reviewed.subtype == subtype
+    assert reviewed.source_proposal_id == proposal_id(source_dir)
+    assert asset.classification.response_path == "classification_response.txt"
+    assert (destination / "classification_response.txt").is_file()
+
+
+def test_cli_failed_source_approved_review_is_rejected(
+    tmp_path: Path,
+) -> None:
+    source_dir = make_failed_b2_bundle(tmp_path)
+    destination = tmp_path / "failed-approved"
+
+    with pytest.raises(ValueError, match="approved review requires a proposal"):
+        main(
+            [
+                "review",
+                "--asset",
+                str(source_dir),
+                "--out",
+                str(destination),
+                "--reviewer",
+                "human-failed-cli",
+                "--status",
+                "approved",
+                "--visual-family",
+                "geometry",
+                "--subtype",
+                "triangle",
+            ]
+        )
+
+    assert not destination.exists()
 
 
 @pytest.mark.parametrize("status", ["approved", "corrected"])

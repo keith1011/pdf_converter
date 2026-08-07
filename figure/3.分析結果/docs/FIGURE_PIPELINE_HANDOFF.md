@@ -345,7 +345,7 @@ hk-dse-2023-math-p2-q001-table01
 `FigureAsset` JSON，包含 bbox、page、question_id、asset_id、SHA-256；
 先不要加入 embedding、Qdrant collection 或圖形理解。
 
-## Figure Track ? Phase B2 status (2026-08-02)
+## Figure Track — Phase B2 status (2026-08-02; review updated 2026-08-04)
 
 Phase B2 is implemented as an isolated semantic-classification boundary after
 MinerU layout/detection and B1 asset preservation:
@@ -355,7 +355,9 @@ MinerU layout/detection and B1 asset preservation:
 3. The strict parser accepts only the six-field JSON contract and records failed
    raw responses instead of guessing.
 4. classification_review publishes approved, corrected or rejected decisions
-   to a new bundle; it never mutates B1.
+   to a new bundle; failed audits may be corrected or rejected using their
+   recorded prompt version as the source-attempt ID, while approval still
+   requires a parsed proposal. It never mutates B1.
 5. phase_b2_figure_classify.py exposes separate propose and review commands.
    Review does not load a model.
 
@@ -365,8 +367,104 @@ valid failure audit at 3.分析結果/output/figure_pipeline/2015p2/q018-b2: the
 returned four evidence items and a subtype in secondary_tags, so strict
 validation intentionally kept figure_type=unknown and
 classification.reviewed=null. The raw response and SHA-256 are retained for
-diagnosis.
+diagnosis. On 2026-08-04, the Figure agent visually reviewed the crop and
+published a corrected review at
+`3.分析結果/output/figure_pipeline/2015p2/q018-b2-reviewed`:
+`figure_type=geometry`, reviewed `subtype=triangle`, and no secondary tags.
+The original failed B2 bundle remains immutable; the question crop, figure
+crop and raw-response SHA-256 values were preserved in the reviewed copy.
 
-The next permitted figure work is an explicit human review/correction of the
-pending/failed B2 output. B3 visible-label OCR and later B4 structured analysis,
-embeddings and Qdrant ingest are out of scope for this handoff.
+The next permitted figure work is Phase B3 visible-label OCR. B4 structured
+analysis, embeddings and Qdrant ingest remain out of scope for this handoff.
+
+## Figure Track — Phase B3 status (2026-08-05)
+
+Phase B3 visible-label OCR is implemented as a separate stage after a valid B2
+bundle. It does not mutate B1 or B2 and does not perform structured geometry
+reasoning, embeddings, retrieval or answer generation.
+
+1. `label_ocr_runner` validates the B2 JSON, figure-crop SHA-256 and any B2
+   classification raw-response reference before inference.
+2. The existing local `Qwen/Qwen3-VL-8B-Instruct` 4-bit client transcribes only
+   labels visibly printed in the figure crop. The prompt forbids solving,
+   description and inferred geometric relations.
+3. The strict parser accepts only `labels`, `confidence` and
+   `needs_review=true`. B3 artifacts use `schema_version=1.2` and
+   `pipeline_version=figure-b3-v1`.
+4. Every valid proposal remains pending until an explicit approved, corrected
+   or rejected review publishes a new sibling bundle. Failed raw responses are
+   retained with their SHA-256 and may only be corrected or rejected.
+5. `phase_b3_visible_labels.py` exposes separate `propose` and `review`
+   commands. Review never loads the model.
+
+Verification is green: the B3 targeted suite is `50 passed`, the full Figure
+pipeline suite is `156 passed`, and Ruff reports no errors. After the
+text-track GPU worker exited, the real local Qwen smoke published a pending
+proposal at `3.分析結果/output/figure_pipeline/2015p2/q018-b3`. Qwen found all
+six labels but returned them in `A, B, C, D, α, β` order with confidence `0.0`.
+Visual review therefore published a corrected sibling at
+`3.分析結果/output/figure_pipeline/2015p2/q018-b3-reviewed` with natural order
+`B, β, C, A, α, D`. The pending source remains unchanged. Question, crop and
+B2 raw-response SHA-256 values are identical across the B2 input, pending B3
+and reviewed B3 bundles.
+
+The next permitted figure work is a separately designed Phase B4 structured
+figure/table analysis. Embeddings, Qdrant ingest and answer reasoning remain
+out of scope.
+
+## Figure Track — Phase B3 multi-shape benchmark (2026-08-05)
+
+Before starting B4, six additional source crops were run through manual B1
+figure isolation, B2 classification and real local B3 Qwen OCR:
+
+- 2012 Q16 sector/annular arc;
+- 2012 Q20 circle and cyclic quadrilateral;
+- 2013 Q16 semicircle with shaded segment;
+- 2013 Q20 bearing diagram with compass labels;
+- 2014 Q16 square with an external triangle;
+- 2021 Q20 square with intersecting triangles.
+
+The reproducible manifest and report are
+`3.分析結果/output/figure_pipeline/benchmark/benchmark-manifest.json` and
+`3.分析結果/reports/figure_pipeline/b3_visible_label_benchmark_2026-08-05.md`.
+All six B3 proposals parsed successfully and found the complete text label
+multiset. Five were approved unchanged; 2013 Q20 was corrected because the
+Chinese compass labels `北` and `東` must use `kind=axis_label`, not generic
+`text`. The measured `(text, kind)` micro precision/recall is `94.1%` (32/34);
+proposal confidence is not calibrated because two correct proposals reported
+`0.0`.
+
+The B3 prompt iteration is now recorded below. Do not begin embeddings or
+Qdrant ingest from the exploratory predictions.
+
+## Figure Track — Phase B3 prompt v2/v3 iteration (2026-08-05)
+
+Prompt versioning is now separate from the stable artifact shape. B3 assets
+remain `schema_version=1.2` and `pipeline_version=figure-b3-v1`; proposal and
+failed-audit metadata accept `figure-b3-v1`, `figure-b3-v2` and
+`figure-b3-v3`. The config default is v3, while v1 and v2 remain reproducible.
+
+The same six reviewed B2 inputs were rerun without changing their crops:
+
+- v1 baseline: 6/6 parseable, 5/6 exact `(text, kind)`, micro F1 94.1%;
+- v2: 5/6 parseable and exact, micro F1 88.5%; it fixed compass kinds but
+  2014 Q16 degenerated into 384 exclamation marks;
+- v3: 6/6 parseable and exact, 34 TP / 0 FP / 0 FN, micro F1 100%, with all six
+  proposals approved unchanged after human comparison to the existing gold.
+
+v3 removes v2's local `value or marker` adjacency wording, retains explicit
+`北`/`東` axis-label and visual scan-order guidance, and defines confidence over
+the complete transcription. All v3 proposals reported 0.95; this six-sample
+all-correct result is not enough to claim broad confidence calibration. Order
+is still excluded from the primary accuracy gate.
+
+Verification is green: B3 targeted `59 passed`, full Figure pipeline
+`171 passed`, and Ruff clean. All recomputed crop hashes match their metadata
+across v1/v2/v3 pending and reviewed bundles. See
+`3.分析結果/reports/figure_pipeline/b3_visible_label_benchmark_2026-08-05.md`
+and `3.分析結果/output/figure_pipeline/benchmark/b3-prompt-comparison.json`.
+
+The next permitted work is a wider, more varied holdout plus a separate
+sequence-order metric. If that remains green, design Phase B4 structured
+figure/table analysis. Embeddings, Qdrant ingest and answer reasoning remain
+out of scope until their own contracts are approved.

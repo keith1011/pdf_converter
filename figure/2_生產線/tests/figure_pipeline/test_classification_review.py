@@ -90,10 +90,48 @@ def make_pending_b2_bundle(
     return source_dir
 
 
+def make_failed_b2_bundle(base: Path) -> Path:
+    source_dir = base / "failed-b2"
+    asset_dir = source_dir / "assets"
+    asset_dir.mkdir(parents=True)
+    crop_path = asset_dir / "q018_fig01.png"
+    Image.new("RGB", (16, 12), color="white").save(crop_path)
+    question_path = source_dir / "question.png"
+    Image.new("RGB", (24, 20), color="white").save(question_path)
+    response_path = source_dir / "classification_response.txt"
+    response_path.write_text('{"invalid":true}\n', encoding="utf-8")
+    (source_dir / "audit-sidecar.bin").write_bytes(b"failed-b2-sidecar")
+
+    payload = valid_asset_dict()
+    payload["source"]["sha256"] = sha256_file(crop_path)
+    payload["source"]["question_crop_sha256"] = sha256_file(question_path)
+    b1 = FigureAsset.model_validate(payload)
+    failed = ClassifiedFigureAsset.from_b1(
+        b1,
+        FigureClassification(
+            status="failed",
+            error="response violates B2 taxonomy",
+            response_path=response_path.name,
+            response_sha256=sha256_file(response_path),
+            model_id="Qwen/Qwen3-VL-8B-Instruct",
+            quantization="4-bit",
+            prompt_version="figure-b2-v1",
+        ),
+    )
+    write_asset(source_dir / "figure_asset.json", failed)
+    return source_dir
+
+
 def proposal_id(source_dir: Path) -> str:
     asset = load_asset(source_dir)
-    assert asset.classification.proposed is not None
-    return f"{asset.asset_id}:{asset.classification.proposed.prompt_version}"
+    proposal = asset.classification.proposed
+    prompt_version = (
+        proposal.prompt_version
+        if proposal is not None
+        else asset.classification.prompt_version
+    )
+    assert prompt_version is not None
+    return f"{asset.asset_id}:{prompt_version}"
 
 
 def approved_decision(source_dir: Path) -> ReviewedClassification:
@@ -212,6 +250,115 @@ def test_corrected_review_replaces_semantics_without_mutating_source(
     assert asset.classification.proposed == original.classification.proposed
     assert asset.classification.reviewed == decision
     assert load_asset(source_dir) == original
+
+
+def test_failed_source_corrected_review_preserves_audit_sidecar_and_source(
+    tmp_path: Path,
+) -> None:
+    source_dir = make_failed_b2_bundle(tmp_path)
+    destination = tmp_path / "failed-corrected"
+    original = load_asset(source_dir)
+    source_snapshot = snapshot_tree(source_dir)
+    decision = ReviewedClassification(
+        visual_family="geometry",
+        subtype="triangle",
+        secondary_tags=[],
+        status="corrected",
+        reviewer="human-failed-1",
+        source_proposal_id=proposal_id(source_dir),
+    )
+
+    asset = review_bundle(source_dir, destination, decision)
+
+    assert asset.figure_type == "geometry"
+    assert asset.classification.status == "corrected"
+    assert asset.classification.proposed is None
+    assert asset.classification.reviewed == decision
+    assert asset.classification.response_path == original.classification.response_path
+    assert asset.classification.response_sha256 == original.classification.response_sha256
+    assert asset.classification.error == original.classification.error
+    assert asset.classification.prompt_version == original.classification.prompt_version
+    assert snapshot_tree(source_dir) == source_snapshot
+    assert load_asset(source_dir) == original
+    assert (destination / "classification_response.txt").read_bytes() == source_snapshot[
+        "classification_response.txt"
+    ]
+
+
+def test_failed_source_rejected_review_preserves_audit_sidecar_and_source(
+    tmp_path: Path,
+) -> None:
+    source_dir = make_failed_b2_bundle(tmp_path)
+    destination = tmp_path / "failed-rejected"
+    original = load_asset(source_dir)
+    source_snapshot = snapshot_tree(source_dir)
+    decision = ReviewedClassification(
+        visual_family="unknown",
+        subtype="unclassified",
+        secondary_tags=[],
+        status="rejected",
+        reviewer="human-failed-2",
+        source_proposal_id=proposal_id(source_dir),
+    )
+
+    asset = review_bundle(source_dir, destination, decision)
+
+    assert asset.figure_type == "unknown"
+    assert asset.classification.status == "rejected"
+    assert asset.classification.proposed is None
+    assert asset.classification.reviewed == decision
+    assert asset.classification.response_path == original.classification.response_path
+    assert asset.classification.response_sha256 == original.classification.response_sha256
+    assert asset.classification.error == original.classification.error
+    assert snapshot_tree(source_dir) == source_snapshot
+    assert load_asset(source_dir) == original
+
+
+def test_failed_source_approved_review_is_rejected_without_copy(
+    tmp_path: Path,
+) -> None:
+    source_dir = make_failed_b2_bundle(tmp_path)
+    destination = tmp_path / "failed-approved"
+    source_snapshot = snapshot_tree(source_dir)
+    decision = ReviewedClassification(
+        visual_family="geometry",
+        subtype="triangle",
+        secondary_tags=[],
+        status="approved",
+        reviewer="human-failed-3",
+        source_proposal_id=proposal_id(source_dir),
+    )
+
+    with pytest.raises(ValueError, match="approved review requires a proposal"):
+        review_bundle(source_dir, destination, decision)
+
+    assert not destination.exists()
+    assert snapshot_tree(source_dir) == source_snapshot
+
+
+def test_failed_source_response_hash_mismatch_fails_before_copy(
+    tmp_path: Path,
+) -> None:
+    source_dir = make_failed_b2_bundle(tmp_path)
+    (source_dir / "classification_response.txt").write_text(
+        '{"tampered":true}\n',
+        encoding="utf-8",
+    )
+    destination = tmp_path / "failed-response-tampered"
+    decision = ReviewedClassification(
+        visual_family="geometry",
+        subtype="triangle",
+        secondary_tags=[],
+        status="corrected",
+        reviewer="human-failed-4",
+        source_proposal_id=proposal_id(source_dir),
+    )
+
+    with pytest.raises(ValueError, match="classification response hash"):
+        review_bundle(source_dir, destination, decision)
+
+    assert not destination.exists()
+    assert list(tmp_path.glob(".failed-response-tampered.staging-*")) == []
 
 
 def test_rejected_review_uses_unknown_and_stays_unresolved(tmp_path: Path) -> None:

@@ -136,8 +136,8 @@ class FigureClassification(StrictModel):
             if self.reviewed is not None:
                 raise ValueError("pending classification cannot have reviewed data")
         elif self.status in {"approved", "corrected", "rejected"}:
-            if self.proposed is None:
-                raise ValueError("reviewed classification requires a proposal")
+            if self.proposed is None and self.status == "approved":
+                raise ValueError("approved classification requires a proposal")
             if self.reviewed is None or self.reviewed.status != self.status:
                 raise ValueError("reviewed status must match classification status")
         else:
@@ -145,9 +145,6 @@ class FigureClassification(StrictModel):
                 raise ValueError("failed classification cannot contain proposal or review data")
             if self.error is None or not self.error.strip():
                 raise ValueError("failed classification requires an error")
-        if self.status != "failed" and self.error is not None:
-            raise ValueError("error is only valid for failed classification")
-
         response_reference = (self.response_path, self.response_sha256)
         if (self.response_path is None) != (self.response_sha256 is None):
             raise ValueError("response_path and response_sha256 must be provided together")
@@ -158,8 +155,19 @@ class FigureClassification(StrictModel):
                 raise ValueError("failed classification requires a raw response reference")
             if any(value is None for value in failure_metadata):
                 raise ValueError("failed classification requires model metadata")
-        elif any(value is not None for value in failure_metadata):
-            raise ValueError("top-level model metadata is only valid for failed classification")
+        elif self.proposed is None:
+            if self.status not in {"corrected", "rejected"}:
+                raise ValueError("proposal-less review must be corrected or rejected")
+            if self.error is None or not self.error.strip():
+                raise ValueError("failed-source review requires the failure audit error")
+            if any(value is None for value in response_reference):
+                raise ValueError("failed-source review requires a raw response reference")
+            if any(value is None for value in failure_metadata):
+                raise ValueError("failed-source review requires model metadata")
+        elif self.error is not None or any(value is not None for value in failure_metadata):
+            raise ValueError(
+                "error and top-level model metadata are only valid for failed-source reviews"
+            )
         return self
 
 

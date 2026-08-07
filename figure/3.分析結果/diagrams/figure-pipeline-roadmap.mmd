@@ -1,0 +1,21 @@
+flowchart TD
+    B1["B1 complete<br/>Asset preservation + MinerU"] --> B2["B2 complete<br/>Qwen3-VL 8B 4-bit classifier + tests"]
+    B2 --> G["Current gate<br/>Q18 smoke failed strict taxonomy"]
+    G --> R["Human review<br/>Inspect crop + raw response"]
+    R -->|corrected or approved| P["Publish reviewed B2 bundle"]
+    R -->|rejected| P
+    P --> V["Validate identity, bbox, SHA-256,<br/>and immutable B1 source"]
+    V -->|pass| B2OK["B2 acceptance gate"]
+    V -->|fail| R
+    B2OK --> B3["B3 visible-label OCR<br/>Reuse existing Qwen text OCR"]
+    B3 --> B4["B4 structured figure/table analysis"]
+    B4 --> B5["B5 embeddings"]
+    B5 --> B6["B6 Qdrant ingest"]
+    H["Repository housekeeping<br/>Record root-path deletions +<br/>stage selected docs only"] -.-> B2OK
+    classDef done fill:#d9f7e8,stroke:#16804b,color:#0b3d24
+    classDef gate fill:#fff0c2,stroke:#b7791f,color:#5f370e
+    classDef future fill:#e8eef7,stroke:#496a91,color:#1f344d
+    classDef risk fill:#ffe0e0,stroke:#b83232,color:#5b1111
+    class B1,B2 done
+    class G,R,H gate
+    class P,V,B2OK,B3,B4,B5,B6 future

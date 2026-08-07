@@ -17,9 +17,10 @@ from .proposal import sha256_file
 def _load_pending_asset(source_dir: Path) -> ClassifiedFigureAsset:
     asset_path = source_dir / "figure_asset.json"
     asset = ClassifiedFigureAsset.model_validate_json(asset_path.read_text(encoding="utf-8"))
-    if asset.classification.status != "pending":
-        raise ValueError("classification review requires a pending B2 asset")
-    if asset.classification.proposed is None:
+    status = asset.classification.status
+    if status not in {"pending", "failed"}:
+        raise ValueError("classification review requires a pending or failed B2 asset")
+    if status == "pending" and asset.classification.proposed is None:
         raise ValueError("classification review requires a pending proposal")
 
     crop_path = resolve_bundle_path(source_dir, asset.source.crop_path)
@@ -27,14 +28,31 @@ def _load_pending_asset(source_dir: Path) -> ClassifiedFigureAsset:
         raise FileNotFoundError(crop_path)
     if sha256_file(crop_path) != asset.source.sha256:
         raise ValueError("source figure crop hash mismatch")
+
+    classification = asset.classification
+    if classification.status == "failed":
+        response_reference = classification.response_path
+        response_sha256 = classification.response_sha256
+        if response_reference is None or response_sha256 is None:
+            raise ValueError("failed classification requires a raw response reference")
+        response_path = resolve_bundle_path(source_dir, response_reference)
+        if not response_path.is_file():
+            raise FileNotFoundError(response_path)
+        if sha256_file(response_path) != response_sha256:
+            raise ValueError("classification response hash mismatch")
     return asset
 
 
 def _expected_proposal_id(asset: ClassifiedFigureAsset) -> str:
     proposal = asset.classification.proposed
-    if proposal is None:
-        raise ValueError("classification review requires a proposal")
-    return f"{asset.asset_id}:{proposal.prompt_version}"
+    prompt_version = (
+        proposal.prompt_version
+        if proposal is not None
+        else asset.classification.prompt_version
+    )
+    if prompt_version is None:
+        raise ValueError("classification review requires a proposal prompt version")
+    return f"{asset.asset_id}:{prompt_version}"
 
 
 def _validate_decision_binding(
