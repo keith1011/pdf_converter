@@ -177,7 +177,75 @@ metadata across all v1/v2/v3 pending and reviewed bundles. Comparison report:
 machine-readable metrics:
 `3.分析結果/output/figure_pipeline/benchmark/b3-prompt-comparison.json`.
 
-Next step: extend the holdout with more varied/non-geometry figures and define
-a separate sequence-order metric. If that remains green, design B4 structured
-figure/table analysis. Embeddings, Qdrant ingest and answer reasoning remain
-later phases.
+The next holdout is now complete. A separate sequence-order metric was
+intentionally not defined or scored in this round.
+
+## 2026-08-07 — Expanded B3-v3 holdout
+
+Six new B1 manual figure bundles were added from the 2018 and 2022 crops:
+
+- 2018 Q6: coordinate graph with two labelled lines;
+- 2018 Q16: parallelogram with diagonals and vertices A–F;
+- 2018 Q32: logarithmic function graph;
+- 2022 Q14: non-geometry dot-pattern sequence;
+- 2022 Q19: triangle with an exterior-angle construction;
+- 2022 Q24: coordinate graph with a straight line.
+
+The expanded manifest is
+`3.分析結果/output/figure_pipeline/benchmark/benchmark-manifest-v2.json` and
+the machine-readable result is
+`3.分析結果/output/figure_pipeline/benchmark/holdout-comparison-2026-08-07.json`.
+
+B2 used one sequential local `Qwen/Qwen3-VL-8B-Instruct` 4-bit client. Five
+of six proposals parsed. The 2018 Q16 response was retained as a failed audit
+because its `secondary_tags` contained an invalid `triangle` taxonomy value and
+it returned four evidence items; a human then published a corrected
+`geometry/quadrilateral` review. The other five classifications were approved.
+
+B3-v3 parsed all six proposals. Human inspection approved all six unchanged;
+the new set contains 28 typed visible labels (the dot-pattern sample has zero
+printed labels). Text-only and exact `(text, kind)` multiset matches are both
+6/6, with TP/FP/FN `28/0/0`, precision/recall/F1 `100%`, and mean proposal
+confidence `0.95`. Across the original six plus this holdout: 12/12 parseable,
+62/0/0, 100% precision/recall/F1, and 12/12 exact samples. The uniform
+confidence is still not a calibration claim.
+
+The 30 new stage bundles (B1, B2, reviewed B2, B3-v3 and reviewed B3-v3) were
+schema-validated and their figure-crop SHA-256 values recomputed successfully.
+No source bundle was overwritten. Sequence order remains unscored by explicit
+request; only label multisets are reported here. B4 structured figure/table
+analysis, embeddings, Qdrant ingest and answer reasoning remain out of scope.
+
+## 2026-08-07 — Separate B3 sequence-order metric
+
+Sequence order is now evaluated by a separate, versioned contract rather than
+by the B3 content review. `occurrence-pairwise-v1` first requires an exact typed
+label multiset; content-mismatch samples are reported but excluded from order
+scoring. Its primary aggregate is micro Pairwise Order Accuracy. Exact Sequence
+Rate, macro Pairwise Order Accuracy and macro LCS ratio are secondary metrics.
+Zero- and one-label samples are marked trivial and add no comparable pairs.
+
+The independent `visual-scan-order-v1` gold is bound to each B3 asset ID and
+figure-crop SHA-256. It scans top-to-bottom by visual band and left-to-right
+within a band, anchors point labels to their labelled points, preserves repeated
+occurrences and does not use alphabetical or geometry-traversal order. Existing
+B3 reviewed bundles were not changed because their earlier approval did not
+score sequence order.
+
+On the twelve B3-v3 samples, all 12 typed multisets match gold; 11 samples are
+nontrivial and one zero-label dot pattern is excluded from pair denominators.
+Exact sequence rate is `3/11 = 27.3%`; micro Pairwise Order Accuracy is
+`100/156 = 64.1%`; macro Pairwise Order Accuracy is `64.8%`; macro LCS ratio is
+`69.4%`. Content accuracy therefore remains 100%, but visual order does not.
+
+Definition:
+`3.分析結果/docs/figure_pipeline/sequence_order_metric_v1.md`; gold:
+`3.分析結果/evals/figure_pipeline/b3_sequence_order_gold_v1.json`; result:
+`3.分析結果/output/figure_pipeline/benchmark/b3-sequence-order-v1.json`;
+report:
+`3.分析結果/reports/figure_pipeline/b3_sequence_order_evaluation_2026-08-07.md`.
+
+The evaluator has targeted unit and CLI coverage. Before using this metric as
+a release gate, obtain a second independent annotation and measure agreement
+on ambiguous row grouping. Full Figure suite: `183 passed`; Ruff clean. No B3
+prompt or reviewed artifact was modified.

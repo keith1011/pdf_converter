@@ -25,13 +25,24 @@ What is complete
   2_生產線/.
 - Six-shape B3 benchmark completed. v3: 6/6 parseable, 34 TP / 0 FP / 0 FN,
   micro F1 100%; all six proposals were human-checked and approved unchanged.
+- Expanded B3-v3 holdout completed with six more samples: 2018 coordinate graph,
+  2018 parallelogram, 2018 logarithmic graph, 2022 dot-pattern sequence, 2022
+  exterior-angle triangle and 2022 line graph. New holdout: 6/6 parseable,
+  28 TP / 0 FP / 0 FN, micro F1 100%; all six proposals approved unchanged.
+- Combined 12-sample result: 12/12 parseable, 62 TP / 0 FP / 0 FN, micro F1
+  100%. B2 had 5/6 parseable proposals; the 2018 parallelogram was corrected
+  after strict taxonomy validation rejected the raw response.
+- A separate sequence-order metric is now implemented. On the 12-sample v3
+  benchmark: 12/12 content-matched, 11 nontrivial, exact order 3/11 (27.3%),
+  micro Pairwise Order Accuracy 100/156 (64.1%), macro POA 64.8%, macro LCS
+  69.4%. The zero-label dot pattern is excluded from pair denominators.
 - v2 evidence is retained: one 2014 sample degenerated into exclamation marks
   and was not accepted as the current prompt.
-- Tests: 171 Figure pipeline tests passed. Ruff passed.
+- Tests: 183 Figure pipeline tests passed. Ruff passed.
 - Reports and handoff: 3.分析結果/docs/ and
   3.分析結果/reports/figure_pipeline/.
 - Machine-readable comparison:
-  3.分析結果/output/figure_pipeline/benchmark/b3-prompt-comparison.json
+  3.分析結果/output/figure_pipeline/benchmark/b3-sequence-order-v1.json
   (output/ is runtime/ignored state; do not delete it).
 
 Important rules
@@ -43,9 +54,12 @@ Important rules
   for the Figure line yet.
 
 Next step
-1. Add more holdout figures, especially non-geometry samples.
-2. Define and separately score sequence/order accuracy.
-3. If the holdout remains green, design B4 structured figure/table analysis.
+1. Decide whether to improve the B3 prompt/model against the fixed sequence gold
+   or proceed to a separately scoped B4 structured figure/table analysis.
+2. Before using order as a release threshold, add a second independent gold
+   annotation and measure agreement on ambiguous visual rows.
+3. Keep embeddings, Qdrant ingest, retrieval and answer reasoning out of scope
+   until their own contracts are approved.
 
 Useful verification
 - uv run python -m pytest 2_生產線/tests/figure_pipeline -q -p no:cacheprovider

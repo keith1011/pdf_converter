@@ -1,0 +1,176 @@
+{
+  "schema_version": "figure-b3-sequence-gold-v1",
+  "annotation_policy_version": "visual-scan-order-v1",
+  "metric_version": "occurrence-pairwise-v1",
+  "samples": [
+    {
+      "sample_id": "2012p2-q016",
+      "proposal_bundle": "2012p2-q016-b3-v3",
+      "asset_id": "hk-dse-2012-math-p2-q016-fig01",
+      "source_crop_sha256": "f3ba252307644fafc5da7ccdcf8391b1921648d764ea624bd1ef32ae9e20d43d",
+      "labels": [
+        {"text": "O", "kind": "latin_letter"},
+        {"text": "A", "kind": "latin_letter"},
+        {"text": "B", "kind": "latin_letter"},
+        {"text": "C", "kind": "latin_letter"},
+        {"text": "D", "kind": "latin_letter"}
+      ],
+      "note": "Top vertex, middle A/B row, then lower C/D row."
+    },
+    {
+      "sample_id": "2012p2-q020",
+      "proposal_bundle": "2012p2-q020-b3-v3",
+      "asset_id": "hk-dse-2012-math-p2-q020-fig01",
+      "source_crop_sha256": "7aefe4bb1aa68b8c81c6c3df66de59f85e91d60116676f241a4372cc673b18f4",
+      "labels": [
+        {"text": "B", "kind": "latin_letter"},
+        {"text": "C", "kind": "latin_letter"},
+        {"text": "114°", "kind": "angle_value"},
+        {"text": "O", "kind": "latin_letter"},
+        {"text": "28°", "kind": "angle_value"},
+        {"text": "42°", "kind": "angle_value"},
+        {"text": "A", "kind": "latin_letter"},
+        {"text": "D", "kind": "latin_letter"}
+      ],
+      "note": "Global visual bands; the two lower angle values and A/D form left-to-right rows."
+    },
+    {
+      "sample_id": "2013p2-q016",
+      "proposal_bundle": "2013p2-q016-b3-v3",
+      "asset_id": "hk-dse-2013-math-p2-q016-fig01",
+      "source_crop_sha256": "dbc4a73de74db50aa9beade2e63a8beccc8cab7ce7d4bd11ea37308eef150480",
+      "labels": [
+        {"text": "C", "kind": "latin_letter"},
+        {"text": "A", "kind": "latin_letter"},
+        {"text": "B", "kind": "latin_letter"}
+      ],
+      "note": "Top point C, then the A/B baseline from left to right."
+    },
+    {
+      "sample_id": "2013p2-q020",
+      "proposal_bundle": "2013p2-q020-b3-v3",
+      "asset_id": "hk-dse-2013-math-p2-q020-fig01",
+      "source_crop_sha256": "3898527464f355504e8397ece4288322b3bb3f1ad68ca44dc9c6f3db5327b46e",
+      "labels": [
+        {"text": "Q", "kind": "latin_letter"},
+        {"text": "北", "kind": "axis_label"},
+        {"text": "東", "kind": "axis_label"},
+        {"text": "O", "kind": "latin_letter"},
+        {"text": "P", "kind": "latin_letter"}
+      ],
+      "note": "Top point Q, north label, east label, origin, then lower point P."
+    },
+    {
+      "sample_id": "2014p2-q016",
+      "proposal_bundle": "2014p2-q016-b3-v3",
+      "asset_id": "hk-dse-2014-math-p2-q016-fig01",
+      "source_crop_sha256": "c416df47d4ed1b4ed6119b6e52632ad0141e2254f365424890bf8ee60158b2ea",
+      "labels": [
+        {"text": "A", "kind": "latin_letter"},
+        {"text": "D", "kind": "latin_letter"},
+        {"text": "E", "kind": "latin_letter"},
+        {"text": "B", "kind": "latin_letter"},
+        {"text": "F", "kind": "latin_letter"},
+        {"text": "C", "kind": "latin_letter"},
+        {"text": "G", "kind": "latin_letter"}
+      ],
+      "note": "A/D top row, E middle, then B/F/C/G along the baseline."
+    },
+    {
+      "sample_id": "2021p2-q020",
+      "proposal_bundle": "2021p2-q020-b3-v3",
+      "asset_id": "hk-dse-2021-math-p2-q020-fig01",
+      "source_crop_sha256": "5fe03c15913fefd2c1f36c92576a7ec1823506875a2569e7099bc51341b83428",
+      "labels": [
+        {"text": "D", "kind": "latin_letter"},
+        {"text": "C", "kind": "latin_letter"},
+        {"text": "F", "kind": "latin_letter"},
+        {"text": "A", "kind": "latin_letter"},
+        {"text": "E", "kind": "latin_letter"},
+        {"text": "B", "kind": "latin_letter"}
+      ],
+      "note": "D/C top row, F middle-right, then A/E/B along the bottom edge."
+    },
+    {
+      "sample_id": "2018p2-q006",
+      "proposal_bundle": "2018p2-q006-b3-v3",
+      "asset_id": "hk-dse-2018-math-p2-q006-fig01",
+      "source_crop_sha256": "c542cd1a9bb5a8ae5d6354f8d31b509f8f3a8363cd04fd5bad945f396ba8fee9",
+      "labels": [
+        {"text": "y", "kind": "axis_label"},
+        {"text": "O", "kind": "latin_letter"},
+        {"text": "x", "kind": "axis_label"},
+        {"text": "L_2", "kind": "text"},
+        {"text": "L_1", "kind": "text"}
+      ],
+      "note": "Top y label, O/x axis row, then the lower L_2 and L_1 labels."
+    },
+    {
+      "sample_id": "2018p2-q016",
+      "proposal_bundle": "2018p2-q016-b3-v3",
+      "asset_id": "hk-dse-2018-math-p2-q016-fig01",
+      "source_crop_sha256": "617cd95a543b079c3014c639ec362cac6fe0092b2b8aec51663a551827a97681",
+      "labels": [
+        {"text": "A", "kind": "latin_letter"},
+        {"text": "D", "kind": "latin_letter"},
+        {"text": "F", "kind": "latin_letter"},
+        {"text": "B", "kind": "latin_letter"},
+        {"text": "E", "kind": "latin_letter"},
+        {"text": "C", "kind": "latin_letter"}
+      ],
+      "note": "A/D top edge, intersection F, then B/E/C along the lower edge."
+    },
+    {
+      "sample_id": "2018p2-q032",
+      "proposal_bundle": "2018p2-q032-b3-v3",
+      "asset_id": "hk-dse-2018-math-p2-q032-fig01",
+      "source_crop_sha256": "9a550bebcfe34d93e6518703e71ddf16728e791b2f4df09d734a5e2bb2fc8ec3",
+      "labels": [
+        {"text": "y", "kind": "axis_label"},
+        {"text": "y = log_a x", "kind": "legend_text"},
+        {"text": "A", "kind": "latin_letter"},
+        {"text": "y = log_b x", "kind": "legend_text"},
+        {"text": "B", "kind": "latin_letter"},
+        {"text": "O", "kind": "latin_letter"},
+        {"text": "x", "kind": "axis_label"},
+        {"text": "C", "kind": "latin_letter"}
+      ],
+      "note": "Global top-to-bottom scan; O/x share the axis row and precede lower C."
+    },
+    {
+      "sample_id": "2022p2-q014",
+      "proposal_bundle": "2022p2-q014-b3-v3",
+      "asset_id": "hk-dse-2022-math-p2-q014-fig01",
+      "source_crop_sha256": "1587cf5faa9265363fade096f93115ff34d3ab6639cad6fc2f84486719be8ed0",
+      "labels": [],
+      "note": "No visible text label; pairwise order is not applicable."
+    },
+    {
+      "sample_id": "2022p2-q019",
+      "proposal_bundle": "2022p2-q019-b3-v3",
+      "asset_id": "hk-dse-2022-math-p2-q019-fig01",
+      "source_crop_sha256": "b90891d172b20e2720fe044a473f7a70d0578857397a8552b7fb86656dc47a08",
+      "labels": [
+        {"text": "A", "kind": "latin_letter"},
+        {"text": "D", "kind": "latin_letter"},
+        {"text": "B", "kind": "latin_letter"},
+        {"text": "E", "kind": "latin_letter"},
+        {"text": "C", "kind": "latin_letter"}
+      ],
+      "note": "A top, D middle, then B/E/C along the triangle base."
+    },
+    {
+      "sample_id": "2022p2-q024",
+      "proposal_bundle": "2022p2-q024-b3-v3",
+      "asset_id": "hk-dse-2022-math-p2-q024-fig01",
+      "source_crop_sha256": "943d6a2ec0e1d702d0e98c1733381504e32d7a87a55fa2ea4972cdb3cbb197c1",
+      "labels": [
+        {"text": "1", "kind": "number"},
+        {"text": "-1", "kind": "number"},
+        {"text": "O", "kind": "latin_letter"},
+        {"text": "x", "kind": "axis_label"}
+      ],
+      "note": "Top value 1, then the -1/O/x axis row from left to right."
+    }
+  ]
+}
