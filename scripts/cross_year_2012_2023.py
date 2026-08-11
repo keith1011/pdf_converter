@@ -1,4 +1,4 @@
-﻿"""Run DSE Math CP Paper 2 MCQ OCR for 2012--2023 in the foreground.
+"""Run DSE Math CP Paper 2 MCQ OCR for 2012--2023 in the foreground.
 
 The runner intentionally rebuilds each specialized MCQ layout with the
 layout CLI's default ``--skip-first-page`` setting, then routes only the
@@ -109,7 +109,7 @@ def main() -> int:
                     "uv",
                     "run",
                     "python",
-                    "pdf_to_images.py",
+                    "1_收集資料/_scripts/pdf_to_images.py",
                     str(pdf),
                     "--out-dir",
                     str(pages_dir),
@@ -123,33 +123,36 @@ def main() -> int:
         else:
             log(f"{doc_id} RENDER_SKIP existing page images")
 
-        rc, seconds = run_step(
-            doc_id,
-            "LAYOUT",
-            [
-                "uv",
-                "run",
-                "--with",
-                "rapidocr-onnxruntime",
-                "python",
-                "scripts/dse_mcq_layout_doc.py",
-                "--pages-dir",
-                str(pages_dir),
-                "--pdf",
-                str(pdf),
-                "--out-dir",
-                str(pages_dir),
-                "--work-dir",
-                str(work_dir),
-                "--no-backup-layout",
-                "--no-overlays",
-            ],
-        )
-        row["steps"]["layout"] = {"rc": rc, "seconds": round(seconds, 1)}
-        if rc or not layout_path.is_file():
-            row["error"] = "layout failed"
-            log(f"DOC_FAIL {doc_id} layout")
-            continue
+        if layout_path.is_file():
+            log(f"{doc_id} LAYOUT_SKIP existing layout (preserved)")
+            row["steps"]["layout"] = {"rc": 0, "seconds": 0.0, "reused": True}
+        else:
+            rc, seconds = run_step(
+                doc_id,
+                "LAYOUT",
+                [
+                    "uv",
+                    "run",
+                    "--with",
+                    "rapidocr-onnxruntime",
+                    "python",
+                    "scripts/dse_mcq_layout_doc.py",
+                    "--pages-dir",
+                    str(pages_dir),
+                    "--pdf",
+                    str(pdf),
+                    "--out-dir",
+                    str(pages_dir),
+                    "--work-dir",
+                    str(work_dir),
+                    "--no-backup-layout",
+                ],
+            )
+            row["steps"]["layout"] = {"rc": rc, "seconds": round(seconds, 1)}
+            if rc or not layout_path.is_file():
+                row["error"] = "layout failed"
+                log(f"DOC_FAIL {doc_id} layout")
+                continue
 
         cover_excluded, boxes = validate_cover_excluded(layout_path)
         row["layout"] = {"cover_excluded": cover_excluded, "boxes": boxes}

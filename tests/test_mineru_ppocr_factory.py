@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ocr_pipeline.engines.mineru_layout import MineruLayoutEngine
+from ocr_pipeline.engines.paddleocr_vl_text import PaddleOcrVlTextEngine
 from ocr_pipeline.engines.ppocr_text import PpocrTextEngine
 from ocr_pipeline.engines.unimernet_formula import UnimernetFormulaEngine
 from ocr_pipeline.engines.vlm_formula import VlmFormulaEngine
@@ -50,7 +51,7 @@ def test_factory_default_engines_match_trunk_when_omitted(tmp_path):
         }
     )
     assert isinstance(pipeline.layout_engine, MineruLayoutEngine)
-    assert isinstance(pipeline.router.text_router.text_engine, VlmTextEngine)
+    assert isinstance(pipeline.router.text_router.text_engine, PaddleOcrVlTextEngine)
     assert isinstance(pipeline.router.math_router.formula_engine, VlmFormulaEngine)
 
 

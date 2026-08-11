@@ -157,11 +157,11 @@
 
 ## 2026-07-26 23:50 — DSE MCQ region TDD green + review
 - Implemented Tasks 1–5; focused `test_dse_mcq_*` green; ruff + ohm review done; no commit.
-- Plan: `docs/superpowers/plans/2026-07-26-dse-paper2-mcq-region.md`
+- Plan: `2_生產線/_history/plans/2026-07-26-dse-paper2-mcq-region.md`
 
 ## 2026-07-26 23:28 — Design approved: DSE P2 MCQ region
 - User confirmed grill locks.
-- Wrote `docs/superpowers/specs/2026-07-26-dse-paper2-mcq-region-design.md` (Approved).
+- Wrote `2_生產線/_history/specs/2026-07-26-dse-paper2-mcq-region-design.md` (Approved).
 
 ## 2026-07-26 23:28 — Grill closed (pending confirm): DSE P2 1題1框
 - Locked **C**: v1 KPI = box correctness; quality pass later.
@@ -217,8 +217,8 @@
 
 ## 2026-07-25 00:53 — N-up design approved + writing-plans
 - Brainstorm locked: 2+4 up; uncertain→whole-page; **classifier + fixed midline/2×2** (not XY-Cut++); semantic best-effort; auto-detect.
-- Spec: `docs/superpowers/specs/2026-07-25-nup-classifier-crop-design.md`
-- Plan: `docs/superpowers/plans/2026-07-25-nup-classifier-crop.md` (Tasks 1–7, TDD)
+- Spec: `2_生產線/_history/specs/2026-07-25-nup-classifier-crop-design.md`
+- Plan: `2_生產線/_history/plans/2026-07-25-nup-classifier-crop.md` (Tasks 1–7, TDD)
 - Awaiting execution mode (subagent-driven vs inline).
 
 ## 2026-07-25 00:37 — Verify 2014 after coalesce re-OCR
@@ -305,20 +305,20 @@
 - Per-doc `except (Exception, SystemExit)`; preflight rejects `--ingest` without `--publish`.
 - New test `test_batch_continues_after_ingest_systemexit`.
 - Verification: `uv run pytest tests/test_batch_export.py -q` → **2 passed**.
-- Notes appended to `.superpowers/sdd/task-6-report.md`; no commit.
+- Notes appended to `3.分析結果/_reports/sdd/task-6-report.md`; no commit.
 
 ## 2026-07-24 — Task 6: batch_export CLI
 - TDD RED: `ModuleNotFoundError: ocr_pipeline.batch_export`.
 - Implemented `src/ocr_pipeline/batch_export.py`: stage→publish→ingest, preflight, fail-continue, lazy monkeypatchable homelab imports.
 - Verification: focused related suite **15 passed** (`test_batch_export` + job_stage + ingest_figures + figure_export + content_first).
-- Report: `.superpowers/sdd/task-6-report.md`; no commit.
+- Report: `3.分析結果/_reports/sdd/task-6-report.md`; no commit.
 
 ## 2026-07-24 — Task 4: staging and figure publication
 - TDD RED confirmed: test collection fails because `ocr_pipeline.job_stage` does not exist.
 - Added regression coverage for staging figures, publishing nested figure artifacts, accepting listed figures, and rejecting unlisted on-disk figures.
 - Implemented clean staging, relative-path publication, and DONE completeness checks for `figures/*.png`.
 - Verification: focused 9 passed; full suite 140 passed with 1 third-party deprecation warning; scoped ruff clean.
-- Report: `.superpowers/sdd/task-4-report.md`; no commit created.
+- Report: `3.分析結果/_reports/sdd/task-4-report.md`; no commit created.
 
 ## 2026-07-24 — Task 3: figure crop/export/finalize wiring
 - TDD RED: 2 expected failures (skipped FIGURE had no crop; finalize rejected figure merge input).
@@ -326,25 +326,25 @@
 - Pipeline exports captions to `output/<artifact_source>/figures`, groups them by page, and finalizes them into txt/tex/PageIR.
 - Factory/config expose `pipeline.extract_figures` with default `true`.
 - Verification: focused 2 passed; required related suite 16 passed; integration 2 passed; full suite 135 passed, 1 third-party deprecation warning; ruff clean.
-- Report: `.superpowers/sdd/task-3-report.md`
+- Report: `3.分析結果/_reports/sdd/task-3-report.md`
 
 ## 2026-07-24 — Task 2: Figure caption prompt + figure_export
 - TDD: 2 RED (`figure_export` missing) → implement → 2 GREEN in `test_figure_export.py`.
 - Added `FIGURE_CAPTION_PROMPT`, `export_figures()`; pipeline wiring deferred Task 3.
-- Report: `.superpowers/sdd/task-2-report.md`
+- Report: `3.分析結果/_reports/sdd/task-2-report.md`
 
 ## 2026-07-24 — Task 1: PageIR figure model + render + JSON
 - TDD: 3 RED (missing FIGURE/crop_relpath) → implement → 11 GREEN in `test_page_ir_models` + `test_content_first`.
-- Report: `.superpowers/sdd/task-1-report.md`
+- Report: `3.分析結果/_reports/sdd/task-1-report.md`
 
 ## 2026-07-24 08:38 — writing-plans: figure caption + batch ingest
-- Spec locked: `docs/superpowers/specs/2026-07-24-trunk-qwen-ingest-contract-design.md`
-- Plan written: `docs/superpowers/plans/2026-07-24-figure-caption-batch-ingest.md` (Tasks 1–7)
+- Spec locked: `2_生產線/_history/specs/2026-07-24-trunk-qwen-ingest-contract-design.md`
+- Plan written: `2_生產線/_history/plans/2026-07-24-figure-caption-batch-ingest.md` (Tasks 1–7)
 - Awaiting execution choice: subagent-driven vs inline
 
 ## 2026-07-24 08:36 — Process: brainstorming before writing-plans
 - User rule: open writing plans via Superpowers `/brainstorming` first.
-- Added `.cursor/rules/superpowers-brainstorm-first.mdc`; noted in `CLAUDE.md`.
+- Added `.cursor/rules/superpowers-brainstorm-first.mdc`; archived note in `2_生產線/_archive/CLAUDE.md`.
 
 ## 2026-07-24 08:21 — Close trunk gaps (uv mineru / skip_figures / MathRouter)
 - Wired `skip_figures` into `DynamicRouter` + factory; FIGURE OCR when false.
@@ -416,9 +416,9 @@
 - Main `config/ocr_pipeline.yaml` restored to surya/vlm defaults afterward.
 
 ## 2026-07-23 — Task 10 P-ocr branch comparison scorecard
-- Added `docs/superpowers/evals/p-ocr-branch-scorecard.md` for `qwen-vl`, `got-ppocr`, and `mineru-ppocr`.
+- Added `3.分析結果/_reports/p-ocr-branch-scorecard.md` for `qwen-vl`, `got-ppocr`, and `mineru-ppocr`.
 - Scored columns are formula edits, prose edit minutes, and compile; `layout_s`, `text_s`, `formula_s`, and `total_s` are logged only, never ranking weight.
-- References: spec `docs/superpowers/specs/2026-07-23-ocr-engine-adapters-design.md`; plan `docs/superpowers/plans/2026-07-23-ocr-engine-adapters.md`.
+- References: spec `2_生產線/_history/specs/2026-07-23-ocr-engine-adapters-design.md`; plan `2_生產線/_history/plans/2026-07-23-ocr-engine-adapters.md`.
 
 ## 2026-07-23 — Task 8 MinerU + UniMERNet experiment
 - Added lazy, fail-loud `MineruLayoutEngine` and `UnimernetFormulaEngine`; the formula adapter represents its crop as one full-image display-formula region for MinerU's current UniMERNet API.
@@ -435,15 +435,15 @@
 - Added `PpocrTextEngine` with lazy PaddleOCR import, documented `chinese_cht` default, legacy `.ocr(..., cls=True)` parsing, and explicit missing-dependency `EngineError`.
 - Factory now selects PP-OCR for text/table routes under `engines.text: ppocr`; VLM remains the default. Added mocked unit tests and `requirements-ppocr.txt`.
 - IDE diagnostics: no errors. Required pytest command and `cmd.exe` fallback both returned no shell exit status, so verification and requested commit remain blocked.
-- Report: `.superpowers/sdd/task-6-report.md`.
+- Report: `3.分析結果/_reports/sdd/task-6-report.md`.
 
 ## 2026-07-23 — Task 4 engine pipeline wiring
 - Factory now accepts the `engines` config and wires one `LayoutAnalyzer` both as image source and through `SuryaLayoutEngine`; VLM formula/text/table adapters route via `.ocr()`.
 - `PipelineManager` supports optional keyword-only `layout_engine`, `skip_polish`, `output_tag`, and logged `StageTimer` timings, while old combined-layout constructors remain valid.
-- Focused Task 4 regression suite: **20 passed** in 1.76s. Report: `.superpowers/sdd/task-4-report.md`.
+- Focused Task 4 regression suite: **20 passed** in 1.76s. Report: `3.分析結果/_reports/sdd/task-4-report.md`.
 
 ## 2026-07-23 — writing-plans: OCR engine adapters
-- Plan committed: `docs/superpowers/plans/2026-07-23-ocr-engine-adapters.md` (`79dd2f2`)
+- Plan committed: `2_生產線/_history/plans/2026-07-23-ocr-engine-adapters.md` (`79dd2f2`)
 - Rename commit: `801e9f7` (北辰 → P-ocr)
 - Awaiting execution mode: subagent-driven vs inline
 
@@ -502,7 +502,7 @@
 ## 2026-07-22 23:14 — Ubuntu install blocked
 - Symptom: Ubuntu installer crashes at Storage probing (tried unplug NIC, nomodeset, ip=off, minimized)
 - Decision: allow **Debian 12 netinst** as official Wave 0 fallback; also try BIOS AHCI + disconnect extra disks
-- Updated `homelab/README.md`
+- Updated `2_生產線/_handbooks/homelab/README.md`
 
 ## 2026-07-22 21:26 — Homelab Wave 0 start
 - OS decision: **Ubuntu Server 24.04 LTS** on PC-B
@@ -587,7 +587,7 @@
 - Locked: D scored (edit time + formulas); speed logged not weighted
 - GOT path A; shared contract + adapters; Stage3 off on experiment branches
 - MinerU layout + UniMERNet formula + PP-OCR text; GLM weights first, code later
-- Spec: `docs/superpowers/specs/2026-07-23-ocr-engine-adapters-design.md`
+- Spec: `2_生產線/_history/specs/2026-07-23-ocr-engine-adapters-design.md`
 - No implementation until user approves spec → writing-plans
 
 ## 2026-07-23 — modern-python cleanup (ordered)
@@ -633,15 +633,15 @@ Via `npx skills add … -g -a cursor -y --copy` → `~/.agents/skills`, then cop
 - `pytest-skill` (LambdaTest/agent-skills)
 
 ## 2026-07-24 — Task 5: Ingest pageir_v2 + crop_path (done)
-- Brief: `.superpowers/sdd/task-5-brief.md`
+- Brief: `2_生產線/_history/sdd/task-5-brief.md`
 - Scope: `homelab/ingest/ingest.py` + `tests/test_ingest_figures.py` only
 - TDD RED: 2 failed (`pageir_v1`, missing `crop_path`)
 - Implemented: CHUNK_VERSION pageir_v2; crop_relpath→crop_path; payload optional crop_path
 - GREEN: `uv run pytest tests/test_ingest_figures.py -q` → 2 passed
-- Report: `.superpowers/sdd/task-5-report.md`; no commit
+- Report: `3.分析結果/_reports/sdd/task-5-report.md`; no commit
 
 ## 2026-07-24 — Task 5: Ingest pageir_v2 + crop_path (start)
-- Brief: `.superpowers/sdd/task-5-brief.md`
+- Brief: `2_生產線/_history/sdd/task-5-brief.md`
 - Scope: `homelab/ingest/ingest.py` + `tests/test_ingest_figures.py` only
 - TDD: wrote failing tests for CHUNK_VERSION=pageir_v2 and crop_path mapping
 
@@ -649,9 +649,9 @@ Via `npx skills add … -g -a cursor -y --copy` → `~/.agents/skills`, then cop
 - Reviewed the updated design at `~/.gstack/projects/pdf-scaner/a1217-main-design-20260722-210437.md`.
 - Iteration-1 changes are present: Tailnet/API-key posture, DONE contract, Samba-only, A-side embedding, Snapshot API, MCP read-only guidance, Wave-2 gates, and B resource budget.
 - Remaining blockers are documented in `findings.md`: atomic sync/publication, precise manifest/key/backup/network implementation contracts, Qdrant Point-ID validity, and A-side resource controls.
-## 2026-07-29 — Cross-year error.txt debugging start
+## 2026-07-29 — Cross-year 3.分析結果/error.txt debugging start
 
-- Read `handoff_ocr.md`, planning files, and user-reviewed `error.txt`.
+- Read `handoff_ocr.md`, planning files, and user-reviewed `3.分析結果/error.txt`.
 - Replayed region detection from saved `.lines.json`; no GPU/VLM run.
 - Generated 14 affected-page overlays under `output/missing_question_overlays/`.
 - TDD RED command: `uv run python -m pytest tests/test_dse_mcq_region.py tests/test_mcq_stage3_sanitize.py -q`
@@ -707,3 +707,14 @@ Via `npx skills add … -g -a cursor -y --copy` → `~/.agents/skills`, then cop
 - Removed approved one-off, superseded, legacy `draft.jsonl`, and GLM Python paths.
 - Removed dead compatibility aliases and the no-op `polish_per_page` API/config.
 - Updated active docs and tests; retained N-up and configured optional OCR engines.
+
+## 2026-08-03 — Repository management folders
+
+- Classified non-runtime collection helpers, production documentation and
+  isolated experiments, and OCR QA/report artifacts into `1_收集資料/`,
+  `2_生產線/`, and `3.分析結果/`.
+- Kept `src/`, root `scripts/`, `config/`, `data/`, `output/`, root CLI, and
+  `tests/` in place because the OCR runtime and handoff commands depend on those
+  paths.
+- Updated cross-year rendering to call
+  `1_收集資料/_scripts/pdf_to_images.py` and updated moved-document references.

@@ -71,5 +71,5 @@ def test_missing_paddleocr_raises_install_hint(monkeypatch):
     import ocr_pipeline.engines.ppocr_text as mod
 
     monkeypatch.setitem(sys.modules, "paddleocr", None)
-    with pytest.raises(EngineError, match="requirements-ppocr.txt"):
+    with pytest.raises(EngineError, match="uv sync --group got"):
         mod._load_paddle_ocr(lang="chinese_cht")

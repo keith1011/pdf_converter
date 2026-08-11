@@ -1,0 +1,11 @@
+# Extra deps for PDF -> VLM -> draft.jsonl pipeline
+# Base training env should already have torch / bitsandbytes.
+# Install:
+#   ..\AIbuliding\venv-train\Scripts\pip.exe install -r 2_生產線/_archive/requirements-extract.txt
+
+pymupdf>=1.24.0
+Pillow>=10.0.0
+# Required by GLM-V processor stack
+torchvision>=0.19.0
+# Keep transformers recent for GLM-4.6V-Flash support
+transformers>=4.49.0

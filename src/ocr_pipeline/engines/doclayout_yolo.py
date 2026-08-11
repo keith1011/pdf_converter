@@ -45,7 +45,7 @@ def _load_doclayout_model(*, model_id: str, weights_file: str = DEFAULT_WEIGHTS_
     except ImportError as exc:
         raise EngineError(
             "DocLayout-YOLO requires doclayout-yolo and huggingface_hub. Install "
-            "with `pip install -r requirements-got-ppocr.txt`."
+            "with `uv sync --group got`."
         ) from exc
     try:
         weights_path = hf_hub_download(repo_id=model_id, filename=weights_file)

@@ -43,6 +43,27 @@ def build_parser(pipe_cfg: dict | None = None) -> argparse.ArgumentParser:
         help="Skip Surya; load data/pdf_pages/<stem>/layout.json (implies image reuse)",
     )
     parser.add_argument(
+        "--dse-mcq",
+        action="store_true",
+        help="Use the DSE Mathematics CP Paper 2 question-region Stage1 layout",
+    )
+    parser.add_argument(
+        "--text-engine",
+        choices=(
+            "paddleocr_vl",
+            "vlm",
+            "ppocr",
+        ),
+        default=None,
+        help="Override Stage2: PaddleOCR-VL primary; vlm is the Qwen3-VL fallback",
+    )
+    parser.add_argument(
+        "--crop-dir",
+        type=Path,
+        default=None,
+        help="Override the Stage2 crop directory for this run only",
+    )
+    parser.add_argument(
         "--check-compile",
         action="store_true",
         help="After writing .tex, run latexmk/xelatex in the output dir (Ship 1.5)",
@@ -73,12 +94,17 @@ def main() -> None:
     parser = build_parser(pipe_cfg)
     args = parser.parse_args()
 
+    if args.text_engine is not None:
+        cfg.setdefault("engines", {})["text"] = args.text_engine
+    if args.crop_dir is not None:
+        cfg.setdefault("paths", {})["crop_dir"] = str(args.crop_dir)
+
     if not args.pdf.exists():
         raise SystemExit(f"PDF not found: {args.pdf}")
 
     print_preflight()
     warns = WarnCollector()
-    manager = build_default_pipeline(cfg)
+    manager = build_default_pipeline(cfg, dse_mcq=bool(args.dse_mcq))
     reuse_layout = bool(args.reuse_layout)
     overwrite = not (args.reuse_images or reuse_layout)
     lock_enabled = bool(pipe_cfg.get("single_instance_lock", True)) and not args.allow_concurrent

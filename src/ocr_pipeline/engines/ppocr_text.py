@@ -23,7 +23,8 @@ def _load_paddle_ocr(*, lang: str) -> Any:
         from paddleocr import PaddleOCR
     except ImportError as exc:
         raise EngineError(
-            "PP-OCR requires paddleocr. Install it with `pip install -r requirements-ppocr.txt`."
+            "PP-OCR requires paddleocr. Install the optional uv group with "
+            "`uv sync --group got`."
         ) from exc
     # Orientation/unwarp models add startup cost and are unnecessary for crops.
     return PaddleOCR(

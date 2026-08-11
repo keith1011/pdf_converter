@@ -1,2 +1,2 @@
-# Dev / lint only — does not replace requirements-ocr-pipeline.txt
+# Dev / lint only — runtime dependencies come from pyproject.toml + uv.lock.
 ruff>=0.11

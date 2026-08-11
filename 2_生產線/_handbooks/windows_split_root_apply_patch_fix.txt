@@ -1,0 +1,112 @@
+Figure project: Windows split-root sandbox / apply_patch 排錯紀錄
+====================================================================
+
+日期
+----
+2026-08-03（Asia/Hong_Kong）
+
+範圍
+----
+本報告記錄 Figure workspace 中，Windows split-root sandbox 阻擋
+apply_patch 的主要問題、根因調查、修復方式、驗證結果，以及目前 task
+仍保留舊 sandbox snapshot 的限制。
+
+主要問題 / Bug
+--------------
+在修改 Figure 專案文件時，apply_patch 無法讀取工作區內的檔案，回報：
+
+failed to prepare fs sandbox: failed to prepare windows sandbox wrapper:
+windows unelevated restricted-token sandbox cannot enforce split writable root
+sets directly; refusing to run unsandboxed
+
+結果是：
+- apply_patch 無法進行任何檔案 patch。
+- 需要修改文件時，正常的受控編輯路徑被阻斷。
+- 問題不是 AGENTS.md、Git repository 或目標文件的內容錯誤。
+
+環境證據
+--------
+- Workspace: C:\Users\a1217\OneDrive\桌面\aiworkplace\figure
+- Git branch: codex/figure-b2-qwen-classification
+- Codex CLI: codex-cli 0.146.0
+- 原始 Windows 設定：`[windows] sandbox = "unelevated"`
+- 同時設定了多個 sandbox_workspace_write writable_roots：
+  - C:\Users\a1217\AppData\Local\uv\cache
+  - C:\Users\a1217\AppData\Roaming\uv\data
+  - C:\Users\a1217\AppData\Local\Temp
+- Codex 官方設定把 writable_roots 視為額外可寫根目錄；在 Windows
+  unelevated restricted-token 模式下，這組分離根目錄無法由 wrapper 直接
+  強制套用。
+
+根因
+----
+根因是 Windows sandbox 模式與 writable root 配置不相容：
+
+  unelevated restricted token
+          +
+  workspace root + 多個分離 writable_roots
+          =
+  sandbox wrapper 無法安全建立 split-root write policy
+
+因此 wrapper 選擇拒絕執行，而不是退回未受 sandbox 保護的寫入。
+
+修復方式
+--------
+1. 先確認沒有 project-local `.codex/config.toml` 覆寫設定；實際生效設定
+   位於 `C:\Users\a1217\.codex\config.toml`。
+
+2. 直接執行：
+
+   codex sandbox setup --elevated --current-user
+
+   第一次從一般 elevated tool shell 執行時，收到：
+
+   orchestrator_elevation_required: sandbox provisioning setup must be run
+   from an elevated process
+
+3. 改用 Windows UAC `RunAs` 啟動同一個官方 provisioning command。執行
+   成功，exit code 為 0：
+
+   Start-Process codex.exe -ArgumentList
+     'sandbox','setup','--elevated','--current-user' -Verb RunAs -Wait
+
+4. Provisioning 完成後，Codex 設定已持久化為：
+
+   [windows]
+   sandbox = "elevated"
+
+   原本的 uv cache、uv data、Windows Temp writable_roots 保留，不需要把
+   它們刪掉來換取表面上的單一根目錄。
+
+5. 重試 apply_patch 時，當前 task 仍回報原本的 `unelevated` 錯誤。這不是
+   provisioning 失敗，而是目前 task 在啟動時已取得舊 sandbox policy，
+   sandbox wrapper 不會在同一個 task 內熱切換。
+
+6. 為完成當下的文件任務，使用 UTF-8 定點寫入作為一次性 fallback；只修改
+   指定的文件，不修改程式碼、不刪除資料、不改動其他 workspace roots。
+
+驗證
+----
+已確認：
+- `C:\Users\a1217\.codex\config.toml` 顯示 `sandbox = "elevated"`。
+- elevated provisioning command exit code = 0。
+- writable_roots 仍包含 uv cache、uv data、Windows Temp。
+- 文件修改後 `git diff --check` 通過。
+- 後續新 task 會讀取 elevated sandbox 設定；如 Codex app 尚未刷新設定，
+  重開 app 後再建立新 task。
+
+目前限制與後續操作
+------------------
+- 目前這個 task 的 sandbox policy 是啟動時快照，因此不能靠修改 config
+  立即讓本 task 的 apply_patch 熱切換。
+- 新 task 應可直接使用 apply_patch；若仍出現 `unelevated` 錯誤，先確認
+  config.toml 的 `[windows] sandbox` 是否仍為 `elevated`，再重開 Codex app。
+- 不建議為了繞過錯誤而關閉 sandbox，或刪除原本的 writable_roots；正確
+  修復是使用已 provisioning 的 elevated Windows sandbox。
+
+結論
+----
+主要 bug 是 unelevated Windows restricted-token sandbox 無法處理多個
+split writable roots。已透過 Windows UAC provisioning 將 sandbox 設為
+elevated，並保留必要的 writable_roots。持久設定已修復；只有本次 task
+因舊 policy snapshot 需要等新 task 或重開 app 才會完全生效。

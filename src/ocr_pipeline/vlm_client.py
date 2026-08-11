@@ -122,6 +122,7 @@ def run_vlm_generate(
     max_pixels: int,
     max_new_tokens: int,
     temperature: float,
+    strip_output_fences: bool = True,
 ) -> str:
     """Shared chat-template → greedy generate → decode path for Qwen clients."""
     content: list[dict] = []
@@ -190,7 +191,9 @@ def run_vlm_generate(
     out = processor.batch_decode(
         trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )
-    text = strip_fences(out[0] if out else "")
+    text = out[0] if out else ""
+    if strip_output_fences:
+        text = strip_fences(text)
     del inputs, generated, trimmed
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -287,12 +290,13 @@ class QwenVlClient:
         self.model.eval()
         force_greedy_generation_config(self.model)
 
-    def generate(
+    def _generate(
         self,
         prompt: str,
-        image_path: Path | None = None,
+        image_path: Path | None,
         *,
-        max_new_tokens: int | None = None,
+        max_new_tokens: int | None,
+        strip_output_fences: bool,
     ) -> str:
         self.load()
         assert self.model is not None and self.processor is not None
@@ -305,7 +309,42 @@ class QwenVlClient:
             max_pixels=self.max_pixels,
             max_new_tokens=token_budget,
             temperature=self.temperature,
+            strip_output_fences=strip_output_fences,
         )
+
+    def generate(
+        self,
+        prompt: str,
+        image_path: Path | None = None,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> str:
+        return self._generate(
+            prompt,
+            image_path,
+            max_new_tokens=max_new_tokens,
+            strip_output_fences=True,
+        )
+
+    def generate_raw(
+        self,
+        prompt: str,
+        image_path: Path | None = None,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> str:
+        return self._generate(
+            prompt,
+            image_path,
+            max_new_tokens=max_new_tokens,
+            strip_output_fences=False,
+        )
+
+    def close(self) -> None:
+        self.model = None
+        self.processor = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
 def build_vlm_client(cfg: dict | None = None) -> VlmClient:

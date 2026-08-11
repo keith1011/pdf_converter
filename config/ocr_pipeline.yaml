@@ -1,4 +1,4 @@
-# New OCR pipeline (MinerU layout + Qwen3-VL text/formula)
+# DSE OCR pipeline (specialized layout + PaddleOCR-VL text + Qwen3-VL fallback)
 
 layout:
   dpi: 200
@@ -8,13 +8,22 @@ layout:
   force_backend: ""
 
 engines:
-  # TRUNK LOCKED 2026-07-24 (user): MinerU layout + Qwen text + Qwen formula.
-  # 2026-07-27: default weights → Qwen/Qwen3-VL-8B-Instruct (4bit).
-  # Specialty knives (got / unimernet) are formula-only experiments — never default text path.
+  # Primary Stage2 text engine is PaddleOCR-VL. Use --text-engine vlm for the
+  # local Qwen3-VL fallback; formula routing remains on Qwen3-VL.
+  # Specialty knives (got / unimernet) are formula-only experiments, never the default text path.
   # Runtime: MinerU lives in `.venv-mineru312` (transformers 4.57); main `.venv` may lack mineru.
   layout: "mineru"    # mineru (trunk) | surya | doclayout_yolo
-  text: "vlm"         # vlm (= Qwen) | ppocr
+  text: "paddleocr_vl" # paddleocr_vl (primary) | vlm (Qwen3-VL fallback) | ppocr
   formula: "vlm"      # vlm (= Qwen) | got | unimernet (specialty only)
+
+# Stage1 already supplies one-question crops, so Paddle does not need its own
+# document layout model. Limit image tokens to keep activation peaks bounded.
+paddleocr_vl:
+  use_layout_detection: false
+  max_pixels: 1048576
+  # Native paddle_dynamic fp16 stalled on the local CUDA 12.6 runtime; only
+  # enable fp16 after validating a compatible TensorRT/HPI backend.
+  precision: "fp32"
 
 # Default VLM: Qwen3-VL-8B-Instruct 4bit.
 vlm:
@@ -28,18 +37,35 @@ vlm:
   temperature: 0.0
   max_pixels: 1003520
 
+# Figure B2 semantic classification. A proposal never counts as human review.
+figure_classification:
+  enabled: true
+  max_new_tokens: 256
+  prompt_version: "figure-b2-v1"
+
+# Figure B3 visible-label OCR. Reviewed output is required before PageIR assembly.
+figure_label_ocr:
+  enabled: true
+  max_new_tokens: 384
+  prompt_version: "figure-b3-v3"
+
 # Optional DSE MCQ Stage2 structured shadow output.
 # The trunk remains local Transformers Qwen3-VL 4-bit. Enable this only when an
 # OpenAI-compatible vision endpoint is available; no secret belongs in this file.
 structured_ocr:
   enabled: false
   backend: "instructor_openai"
-  provider: "openai/Qwen/Qwen3-VL-8B-Instruct"
+  provider: ""
   model_name: "Qwen/Qwen3-VL-8B-Instruct"
   base_url: ""
   api_key_env: ""
   shadow_mode: true
   max_validation_retries: 1
+
+# Local-only validation of the existing Stage2 text. This never calls Instructor
+# or any external model and is independent from structured_ocr.enabled.
+local_mcq_validation:
+  enabled: true
 
 paths:
   sources_dir: "data/sources"
@@ -48,7 +74,7 @@ paths:
   crop_dir: "output/crops"
 
 # Pre-MinerU N-up gate (classifier + fixed midline / 2×2 crop). See
-# docs/superpowers/specs/2026-07-25-nup-classifier-crop-design.md
+# 2_生產線/_history/specs/2026-07-25-nup-classifier-crop-design.md
 # Off for now: prefer manually flattened single-page PDFs before OCR.
 nup:
   enabled: false

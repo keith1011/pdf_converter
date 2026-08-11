@@ -1,9 +1,21 @@
 # Findings & Decisions
 
+## 2026-08-03 — Current OCR engine and file organization
+
+- PaddleOCR-VL is the primary local Stage2 text engine for DSE Paper 2 MCQ.
+- Local Qwen3-VL 4-bit remains the explicit `vlm` fallback and formula engine.
+- MiniCPM-V 4.5 and Qwen3.5 GGUF active model paths were removed; prior output
+  artifacts were preserved for comparison.
+- `structured_ocr.enabled` remains `false`; no external Instructor request is
+  made by the current local OCR path.
+- Non-runtime documentation, QA notes, and isolated helpers were classified into
+  `1_收集資料/`, `2_生產線/`, and `3.分析結果/`. Runtime paths stay at root.
+
+
 ## 2026-07-28 — Deploy sherif1313/Arabic-Qwen3.5-OCR-v4 (isolated)
 - HF: https://huggingface.co/sherif1313/Arabic-Qwen3.5-OCR-v4 — **Arabic** OCR finetune of **Qwen3.5-0.8B** (~0.9B), not CJK/math DSE VLM.
 - Needs **transformers≥5.3** (`Qwen3_5ForConditionalGeneration`); trunk pins `transformers<5` (MinerU) → **`.venv-arabic-ocr` only**.
-- Deploy: `scripts/deploy_arabic_qwen35_ocr.ps1` + `requirements-arabic-qwen35-ocr.txt` + `scripts/smoke_arabic_qwen35_ocr.py`.
+- Deploy: `2_生產線/_experiments/arabic_qwen35_ocr/deploy_arabic_qwen35_ocr.ps1` + `2_生產線/_experiments/arabic_qwen35_ocr/requirements-arabic-qwen35-ocr.txt` + `2_生產線/_experiments/arabic_qwen35_ocr/smoke_arabic_qwen35_ocr.py`.
 - Smoke on 2015p2 Q1 crop: loads OK; output garbled / incomplete (`A.` + Arabic digits) — **not suitable as trunk Stage2**.
 - Do **not** swap `config/ocr_pipeline.yaml` default away from Qwen3-VL-8B.
 
@@ -139,7 +151,7 @@ Artifacts: `data/pdf_pages/<year>/layout.json` + `output/dse_mcq_layout_<year>/`
 - Residual: Q8 may clip far-right of graph; `try_run_light_ocr` still stub (smoke used one-off script)
 
 ## 2026-07-26 — DSE MCQ region TDD shipped (no commit)
-- Plan: `docs/superpowers/plans/2026-07-26-dse-paper2-mcq-region.md`
+- Plan: `2_生產線/_history/plans/2026-07-26-dse-paper2-mcq-region.md`
 - Modules: `dse_mcq_{types,profile,region,layout,ocr}.py` + `config/profiles/math_cp_p2.yaml` + `scripts/dse_mcq_regions.py`
 - Tests: 9 passed (`test_dse_mcq_*`); ruff clean on touched files
 - Code-review (inline vs working tree): Spec mostly met; gaps = PP-OCR stub, no figure-contour expand, no “nearby options” soft reject beyond left-bias
@@ -148,7 +160,7 @@ Artifacts: `data/pdf_pages/<year>/layout.json` + `output/dse_mcq_layout_<year>/`
 
 ## 2026-07-26 — Design approved: DSE Paper2 MCQ 1題1框
 - User confirmed shared understanding.
-- Spec: `docs/superpowers/specs/2026-07-26-dse-paper2-mcq-region-design.md` (Approved)
+- Spec: `2_生產線/_history/specs/2026-07-26-dse-paper2-mcq-region-design.md` (Approved)
 - Path: B light OCR + 題號/A–D rules → question ROI `layout.json` → A VLM `--reuse-layout`
 - Reuses `layout_artifact` v1; `block_type=text`; profile `math_cp_p2`; MinerU fallback per page on empty/fail
 
@@ -218,8 +230,8 @@ Artifacts: `data/pdf_pages/<year>/layout.json` + `output/dse_mcq_layout_<year>/`
 | Pipeline shape | Pre-crop gate (Approach 1 shape) with C-style cut |
 
 ### Approved artifacts
-- Spec: `docs/superpowers/specs/2026-07-25-nup-classifier-crop-design.md`
-- Plan: `docs/superpowers/plans/2026-07-25-nup-classifier-crop.md`
+- Spec: `2_生產線/_history/specs/2026-07-25-nup-classifier-crop-design.md`
+- Plan: `2_生產線/_history/plans/2026-07-25-nup-classifier-crop.md`
 - Classifier MVP in plan: **projection-valley heuristics** (CPU, no extra VRAM), not a trained N-up CNN.
 - Implementation (2026-07-25): modules `nup_{types,crop,classify,router,merge,label}`; pipeline Stage1 via `analyze_page_with_nup`; config `nup.enabled=true`; PageIR `version_id`; polish splits on `<<<nup:…>>>`. Tests `-k nup` → 20 passed.
 - Classifier fix post-smoke: dark-spine + landscape→prefer `2_lr` (booklet crease). `confidence_threshold: 0.70`. GPU smoke limit-3 exit 0.
@@ -347,7 +359,7 @@ Against transformers **v4.57** docs + Qwen2-VL README (via context7):
 - No `QDRANT_WRITER_KEY` / `WAVE1_SSH_PASSWORD` in User/Process env on A — ingest + reader neg-test wait on keys in `%USERPROFILE%\.homelab\qdrant.a.env` (generated) + B `apply-qdrant-env.sh`.
 - A-side RP pack works without SSH: `RP_ID=20260723T122750Z`, `DONE_count=1` in `jobs.tar.gz`.
 - Second job published: `Z:\jobs\20260723-130314-wave1demo` (`doc_id=wave1demo`, 8 segments) — ingest pending key rotation.
-- Follow-along path: `homelab/scripts/RUN_ON_B.md` + `wave1-on-b.sh`.
+- Follow-along path: `2_生產線/_handbooks/homelab/RUN_ON_B.md` + `wave1-on-b.sh`.
 
 ## GPU smoke env (2026-07-23)
 - Main `.venv` is **Python 3.14** — no `paddlepaddle` wheel; experiment stacks need **Python 3.12** venvs (`.venv-engines312` for GOT, `.venv-mineru312` for MinerU).
@@ -549,7 +561,7 @@ Executed in order after review:
 - 2017 Q31 是 graph-choice 題；RapidOCR 看見明確 `31.`、下一題 `32.`，但 A/C 未讀到、
   D 缺句點，只命中 B，因 `min_option_hits=3` 被 drop。
 - `MCQ_ROUTER_PROMPT` 只說公式使用 `$...$`，沒有說明貨幣 literal dollar 必須輸出
-  `\$`，與 `error.txt` 多年 currency omission 一致。
+  `\$`，與 `3.分析結果/error.txt` 多年 currency omission 一致。
 - 14 張 pre-fix debug overlays 已集中在 `output/missing_question_overlays/`。
 - 修復後 2012--2023 detector replay 全部為 45/45，無 missing/duplicate；6 個 affected
   layouts 已重建，post-fix overlays 在 `output/fixed_question_overlays/`。

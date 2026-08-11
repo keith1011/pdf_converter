@@ -1,0 +1,89 @@
+目前 OCR 產線流程（分類後說明）
+================================
+
+適用範圍：DSE MATH CP Paper 2 MCQ，以及一般 PDF fallback。
+
+一、DSE MCQ 正式流程
+
+PDF 放入 data/sources/<doc_id>.pdf 後，不會自動執行 OCR。正式流程如下：
+
+  PDF
+   |
+   v
+  Stage 1：頁面 PNG + RapidOCR/rules + DSE regioner
+   |       一題一個 LayoutBlock，meta.question_id 來自印刷題號
+   |       預設跳過第 1 頁「考生須知／封面」
+   v
+  data/pdf_pages/<doc_id>/layout.json + crops/pNNN_qNNN.png
+   |
+   v
+  Stage 2：逐題 crop OCR
+   |       主力 PaddleOCR-VL
+   |       後備／公式：本機 Qwen3-VL 4-bit
+   |       MCQ block 使用 MCQ_ROUTER_PROMPT
+   v
+  Stage 3：deterministic sanitize
+   |       不使用第二次 VLM rewrite，不解題
+   v
+  DraftAssembler / PageIR / quality gate
+   |
+   v
+  output/<doc_id>.<tag>.txt / .tex / .questions.jsonl / .pageir.json / .quality.json
+
+二、各階段主要程式與作用
+
+1. Stage 1
+   scripts/dse_mcq_layout_doc.py
+     讀取頁面 PNG 與 light-OCR lines，呼叫 DSE regioner，輸出完整題框、overlay
+     與 layout.json。
+   src/ocr_pipeline/dse_mcq_region.py
+     依題號、A-D anchors、頁面順序與 gutter 找出每道題的 bbox。
+   src/ocr_pipeline/dse_mcq_layout.py
+     將 region 轉成 LayoutBlock，寫入 question_id metadata。
+   1_收集資料/_scripts/pdf_to_images.py
+     舊式獨立 PDF -> PNG 工具；主 pipeline 也有自己的 render 方法。
+
+2. Stage 2
+   run_ocr_pipeline.py
+     解析 CLI，載入 config/ocr_pipeline.yaml，啟動 PipelineManager。
+   src/ocr_pipeline/pipeline.py
+     管理頁面、layout、route、輸出與 timing。
+   src/ocr_pipeline/routers.py
+     依 LayoutBlock metadata 選擇 MCQ_ROUTER_PROMPT 或一般 router。
+   src/ocr_pipeline/engines/paddleocr_vl_text.py
+     將題目 crop 交給隔離 PaddleOCR-VL worker。
+   scripts/paddleocr_vl_worker.py
+     在獨立 Paddle runtime 中執行一次 OCR，回傳 JSONL 結果。
+   src/ocr_pipeline/engines/vlm_text.py + src/ocr_pipeline/vlm_client.py
+     Paddle 失敗或明確指定 --text-engine vlm 時，使用本機 Qwen3-VL 4-bit。
+   src/ocr_pipeline/mcq_structured.py
+     僅在本地解析／驗證 Stage2 文字；structured_ocr.enabled 預設 false。
+
+3. Stage 3 與輸出
+   src/ocr_pipeline/assemble.py
+     DraftAssembler 依題號組裝，FinalPolisher 對 MCQ 執行 sanitize。
+   src/ocr_pipeline/segmenter.py / content_first.py
+     產生一題一段 PageIR，並輸出 TXT/TEX。
+   src/ocr_pipeline/quality.py
+     檢查 segment 結構；DSE 正式 ingest 仍要另外確認 layout 與 questions.jsonl
+     有完整 Q1-Q45。
+
+三、一般 PDF fallback
+
+一般 PDF 不使用 DSE 一題一框 regioner。主 pipeline 會以
+src/ocr_pipeline/layout.py render page，再由 MinerU layout engine 找出 TEXT、
+FORMULA、TABLE、FIGURE，之後交給一般 TextRouter/MathRouter。普通文字 OCR
+fallback 保留，不會因 DSE 分類而被移除。
+
+四、主要執行命令
+
+# 先建／重建 DSE layout
+uv run python scripts/dse_mcq_layout_doc.py `
+  --pages-dir data/pdf_pages/2015p2 --pdf data/sources/2015p2.pdf `
+  --out-dir data/pdf_pages/2015p2 --work-dir output/dse_mcq_layout_2015p2 `
+  --lines-dir output/dse_mcq_layout_2015p2 --no-backup-layout
+
+# 重用 layout 執行 Stage 2-3
+uv run python run_ocr_pipeline.py data/sources/2015p2.pdf --reuse-layout --output-tag mcq
+
+所有正式 OCR run 應在前景、按年份順序執行，並記錄 timing；不要同時佔用 12 GB GPU。

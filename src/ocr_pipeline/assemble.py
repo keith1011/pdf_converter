@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from opencc import OpenCC
+
 from .latex_math import sanitize_tex_document, strip_model_junk
 from .models import LayoutBlock
 from .prompts import CONTENT_FIRST_POLISH_PROMPT, MCQ_POLISH_PROMPT
@@ -27,7 +29,9 @@ _MATH_RULES_ECHO_MARKERS = (
 
 # Stage3 for MCQ: default keep Stage2 crop text (no VLM rewrite).
 _MCQ_STAGE3_SANITIZE = "sanitize"
+_MCQ_STAGE3_PADDLE_SANITIZE = "paddle_sanitize"
 _MCQ_STAGE3_VLM = "vlm"
+_S2HK_CONVERTER = OpenCC("s2hk")
 
 
 def _looks_like_math_rules_echo(text: str) -> bool:
@@ -172,7 +176,11 @@ class FinalPolisher:
     def __init__(self, vlm, *, mcq_stage3: str = _MCQ_STAGE3_SANITIZE):
         self.vlm = vlm
         mode = (mcq_stage3 or _MCQ_STAGE3_SANITIZE).strip().lower()
-        if mode not in {_MCQ_STAGE3_SANITIZE, _MCQ_STAGE3_VLM}:
+        if mode not in {
+            _MCQ_STAGE3_SANITIZE,
+            _MCQ_STAGE3_PADDLE_SANITIZE,
+            _MCQ_STAGE3_VLM,
+        }:
             mode = _MCQ_STAGE3_SANITIZE
         self.mcq_stage3 = mode
 
@@ -216,7 +224,34 @@ class FinalPolisher:
             if len(chunks) >= 2:
                 return self._polish_question_chunks(chunks, prompt=self.mcq_prompt_header())
             return self._polish_once(draft, prompt=self.mcq_prompt_header())
+        if self.mcq_stage3 == _MCQ_STAGE3_PADDLE_SANITIZE:
+            return self._sanitize_paddle_mcq_draft(draft)
         return self._sanitize_mcq_draft(draft)
+
+    def _sanitize_paddle_mcq_draft(self, draft: str) -> tuple[str, str, list[str]]:
+        """Re-render Paddle MCQ markdown deterministically; never call a VLM."""
+        from .mcq_structured import parse_stage2_text, render_text
+
+        warns = [
+            "mcq stage3 paddle sanitize "
+            "(deterministic five-line render + OpenCC s2hk)"
+        ]
+        rendered: list[str] = []
+        for chunk in split_question_chunks(strip_model_junk((draft or "").strip())):
+            match = _QID_OPENER.match(chunk)
+            if match is None:
+                rendered.append(chunk.strip())
+                warns.append("paddle sanitize kept unnumbered chunk")
+                continue
+            try:
+                result = parse_stage2_text(chunk)
+                rendered.append(render_text(int(match.group(1)), result))
+            except ValueError:
+                rendered.append(chunk.strip())
+                warns.append(f"paddle sanitize kept invalid Q{match.group(1)}")
+        body = _S2HK_CONVERTER.convert("\n\n".join(rendered))
+        body = encode_unicode_outside_math(body)
+        return body, sanitize_tex_document(self.wrap_tex(body)), warns
 
     def _sanitize_mcq_draft(self, draft: str) -> tuple[str, str, list[str]]:
         """Deterministic Stage3 for MCQ: strip junk + pylatexenc; no VLM."""

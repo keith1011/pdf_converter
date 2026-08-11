@@ -7,10 +7,13 @@ from pathlib import Path
 import yaml
 
 from .assemble import DraftAssembler, FinalPolisher
+from .dse_mcq_layout_engine import DseMcqLayoutEngine
+from .dse_mcq_profile import default_math_cp_p2_path, load_mcq_profile
 from .engines.base import EngineError
 from .engines.doclayout_yolo import DocLayoutYoloEngine
 from .engines.got_formula import GotFormulaEngine
 from .engines.mineru_layout import MineruLayoutEngine
+from .engines.paddleocr_vl_text import PaddleOcrVlTextEngine
 from .engines.ppocr_text import PpocrTextEngine
 from .engines.surya_layout import SuryaLayoutEngine
 from .engines.unimernet_formula import UnimernetFormulaEngine
@@ -33,12 +36,13 @@ def load_ocr_config(path: Path | None = None) -> dict:
         return yaml.safe_load(f) or {}
 
 
-def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
+def build_default_pipeline(cfg: dict | None = None, *, dse_mcq: bool = False) -> PipelineManager:
     cfg = cfg or load_ocr_config()
     layout_cfg = cfg.get("layout", {})
     paths = cfg.get("paths", {})
     vlm_cfg = cfg.get("vlm") or {}
     engines_cfg = cfg.get("engines") or {}
+    paddleocr_vl_cfg = cfg.get("paddleocr_vl") or {}
 
     vlm = build_vlm_client(cfg)
     model_name = str(vlm_cfg.get("model_name", "")).lower()
@@ -51,13 +55,17 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     polish_tokens = int(vlm_cfg.get("max_new_tokens", 2048))
     route_tokens = int(vlm_cfg.get("max_new_tokens_route", min(1024, polish_tokens)))
 
-    # Trunk default (2026-07-24): MinerU + Qwen + Qwen when engines.* omitted.
+    # Current default: MinerU + PaddleOCR-VL text + Qwen formula.
     layout_name = str(engines_cfg.get("layout", "mineru")).lower()
-    text_name = str(engines_cfg.get("text", "vlm")).lower()
+    text_name = str(engines_cfg.get("text", "paddleocr_vl")).lower()
     formula_name = str(engines_cfg.get("formula", "vlm")).lower()
     if layout_name not in {"surya", "doclayout_yolo", "mineru"}:
         raise EngineError(f"Unknown layout engine: {layout_name}")
-    if text_name not in {"vlm", "ppocr"}:
+    if text_name not in {
+        "vlm",
+        "ppocr",
+        "paddleocr_vl",
+    }:
         raise EngineError(f"Unknown text engine: {text_name}")
     if formula_name not in {"vlm", "got", "unimernet"}:
         raise EngineError(f"Unknown formula engine: {formula_name}")
@@ -78,6 +86,20 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     if text_name == "ppocr":
         text_engine = PpocrTextEngine()
         table_engine = PpocrTextEngine()
+    elif text_name == "paddleocr_vl":
+        device = str(layout_cfg.get("device", "gpu"))
+        max_pixels = paddleocr_vl_cfg.get("max_pixels")
+        precision = paddleocr_vl_cfg.get("precision")
+        engine_kwargs = {
+            "device": device,
+            "use_layout_detection": bool(
+                paddleocr_vl_cfg.get("use_layout_detection", True)
+            ),
+            "max_pixels": int(max_pixels) if max_pixels is not None else None,
+            "precision": str(precision) if precision is not None else None,
+        }
+        text_engine = PaddleOcrVlTextEngine(**engine_kwargs)
+        table_engine = text_engine
     else:
         text_engine = VlmTextEngine(vlm, max_new_tokens=route_tokens)
         table_engine = VlmTextEngine(vlm, max_new_tokens=route_tokens, prompt=TABLE_ROUTER_PROMPT)
@@ -88,12 +110,11 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
         max_new_tokens=route_tokens,
         structured_ocr_client=build_mcq_structured_client(
             cfg.get("structured_ocr") or {},
-            default_model_name=str(
-                vlm_cfg.get("model_name", "Qwen/Qwen3-VL-8B-Instruct")
-            ),
+            default_model_name=str(vlm_cfg.get("model_name", "Qwen/Qwen3-VL-8B-Instruct")),
         ),
-        structured_ocr_shadow_mode=bool(
-            (cfg.get("structured_ocr") or {}).get("shadow_mode", True)
+        structured_ocr_shadow_mode=bool((cfg.get("structured_ocr") or {}).get("shadow_mode", True)),
+        local_mcq_validation_enabled=bool(
+            (cfg.get("local_mcq_validation") or {}).get("enabled", True)
         ),
     )
     crop_dir = Path(paths.get("crop_dir", "output/crops"))
@@ -106,18 +127,30 @@ def build_default_pipeline(cfg: dict | None = None) -> PipelineManager:
     nup_margin_norm = float(nup_cfg.get("margin_norm", 0.01))
     router = DynamicRouter(math, text, crop_dir=crop_dir, skip_figures=skip_figures)
     mcq_stage3 = str(pipe_cfg.get("mcq_stage3", _MCQ_STAGE3_DEFAULT)).strip().lower()
-    if mcq_stage3 not in {"sanitize", "vlm"}:
+    if mcq_stage3 not in {"sanitize", "paddle_sanitize", "vlm"}:
         mcq_stage3 = _MCQ_STAGE3_DEFAULT
+    if text_name == "paddleocr_vl" and mcq_stage3 == "sanitize":
+        mcq_stage3 = "paddle_sanitize"
+
+    base_layout_engine = (
+        DocLayoutYoloEngine(device=str(layout_cfg.get("device", "cuda")))
+        if layout_name == "doclayout_yolo"
+        else MineruLayoutEngine(device=str(layout_cfg.get("device", "cuda")))
+        if layout_name == "mineru"
+        else SuryaLayoutEngine(layout)
+    )
+    layout_engine = (
+        DseMcqLayoutEngine(
+            profile=load_mcq_profile(default_math_cp_p2_path()),
+            fallback_engine=base_layout_engine,
+        )
+        if dse_mcq
+        else base_layout_engine
+    )
 
     return PipelineManager(
         layout=layout,
-        layout_engine=(
-            DocLayoutYoloEngine(device=str(layout_cfg.get("device", "cuda")))
-            if layout_name == "doclayout_yolo"
-            else MineruLayoutEngine(device=str(layout_cfg.get("device", "cuda")))
-            if layout_name == "mineru"
-            else SuryaLayoutEngine(layout)
-        ),
+        layout_engine=layout_engine,
         router=router,
         assembler=DraftAssembler(),
         polisher=FinalPolisher(vlm, mcq_stage3=mcq_stage3),

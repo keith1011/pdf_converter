@@ -27,6 +27,38 @@ def test_run_ocr_pipeline_parser_exposes_reuse_layout_and_allow_concurrent():
     assert args.allow_concurrent is True
 
 
+def test_run_ocr_pipeline_parser_exposes_dse_mcq_mode():
+    parser = run_ocr_pipeline.build_parser({})
+
+    args = parser.parse_args(["dummy.pdf", "--dse-mcq"])
+
+    assert args.dse_mcq is True
+
+
+def test_run_ocr_pipeline_parser_accepts_a_text_engine_override():
+    parser = run_ocr_pipeline.build_parser({})
+
+    args = parser.parse_args(["dummy.pdf", "--text-engine", "paddleocr_vl"])
+
+    assert args.text_engine == "paddleocr_vl"
+
+
+def test_run_ocr_pipeline_parser_accepts_qwen_vlm_fallback():
+    parser = run_ocr_pipeline.build_parser({})
+
+    args = parser.parse_args(["dummy.pdf", "--text-engine", "vlm"])
+
+    assert args.text_engine == "vlm"
+
+
+def test_run_ocr_pipeline_parser_accepts_a_crop_dir_override():
+    parser = run_ocr_pipeline.build_parser({})
+
+    args = parser.parse_args(["dummy.pdf", "--crop-dir", "output/crops/test-run"])
+
+    assert args.crop_dir == Path("output/crops/test-run")
+
+
 def test_arrange_only_parser_exposes_check_compile():
     parser = arrange_only.build_parser()
     args = parser.parse_args(["dummy.txt", "--check-compile"])

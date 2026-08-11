@@ -1,6 +1,6 @@
 # Handoff OCR — DSE Paper2 MCQ (for Codex agent)
 
-**Date:** 2026-07-29
+**Date:** 2026-08-05
 **Repo:** `C:\Users\a1217\OneDrive\桌面\aiworkplace\pdf scaner`
 **Audience:** Codex / next coding agent — read this first, then `task_plan.md` / `findings.md` / `progress.md`.
 **Product:** P-ocr feedstock (OCR → editable TeX). Chat/老師 UI is out of scope here.
@@ -31,8 +31,8 @@ Golden doc: **`data/sources/2015p2.pdf`** · layout artifact: **`data/pdf_pages/
 | Host split | **B** light OCR → `layout.json`; **A** VLM only |
 | Figures | Inside the question box (one VLM call per Q) |
 | N-up / dual-column | Off (`nup.enabled: false`) |
-| Trunk VLM | **Qwen3-VL-8B-Instruct 4bit** (`config/ocr_pipeline.yaml`) |
-| Trunk stack | MinerU layout + Qwen text/formula; `transformers>=4.49,<5` |
+| Primary Stage2 text | **PaddleOCR-VL** (`config/ocr_pipeline.yaml`) |
+| Text fallback / formula | Local **Qwen3-VL-8B-Instruct 4bit**; `transformers>=4.49,<5` |
 | MCQ Stage3 | `pipeline.mcq_stage3: sanitize` (Stage2 text + pylatexenc) |
 | Formal ingest | Requires quality **pass** |
 | Arabic-Qwen3.5-OCR-v4 | **Experiment only** — isolated `.venv-arabic-ocr`; **not** trunk |
@@ -60,7 +60,7 @@ User said: **題目導出合格了** (export acceptable). Small emit bugs were f
 
 ### Cross-year repair (2026-07-29)
 
-- User QA is in `error.txt`.
+- User QA is in `3.分析結果/error.txt`.
 - Regioner fixes: leading orphan A--D recovery, longest increasing qid sequence
   (2020 `II.` misread as `11.`), and sequence-backed incomplete graph questions.
 - Orphan bbox follow-up: align `x1` to the same-page detected qid gutter and
@@ -107,6 +107,27 @@ User said: **題目導出合格了** (export acceptable). Small emit bugs were f
 
 ---
 
+## 3A. Current engine decision (2026-08-05)
+
+- PaddleOCR-VL is the configured primary Stage2 text engine for the DSE MCQ path.
+- Local Qwen3-VL 4-bit remains available through `--text-engine vlm` as the
+  explicit fallback and formula engine.
+- MiniCPM-V 4.5 and Qwen3.5 GGUF were removed from the active project paths;
+  their historical comparison artifacts remain preserved under `output/`.
+- `structured_ocr.enabled` remains `false`; no external or paid Vision API is
+  part of the current pipeline.
+- Paddle crop optimization (2026-08-05): disable Paddle's duplicate layout
+  detector, cap inputs at 1,048,576 pixels, and share one worker between text
+  and table routing. A real crop peaked at about 10.47 GB versus 11.97 GB
+  before the change. Two independent workers still do not fit safely on the
+  12 GB GPU. Native `paddle_dynamic` fp16 peaked near 8.7 GB but failed to
+  return after 119 seconds (fp32 completed in 25.3 seconds), so fp32 remains
+  the default; fp16 is optional only for a future validated TensorRT/HPI path.
+- The organization folders classify documentation and non-runtime helpers.
+  Runtime paths (`src/`, `scripts/`, `config/`, `data/`, `output/`, root CLI,
+  and `tests/`) remain unchanged for compatibility.
+
+---
 ## 4. Architecture (MCQ path)
 
 ```
@@ -182,7 +203,7 @@ Priority order unless user redirects:
 1. **Teacher QA on `2015p2.mcq.txt`** — spot-check weak OCR (figures, short stems); fix layout/OCR only where evidence shows miss.
 2. **Multi-year layout bakeoff** — 2012/13/16 already had regioner work; confirm 45/45 + one VLM pass each if user wants.
 3. **Compile check** — `latexmk -xelatex output/2015p2.mcq.tex` if teacher wants PDF preview.
-4. **Ingest path** — only after quality pass + publish/`DONE.json` discipline (`homelab/DATA_PLANE.md`); do not invent job layouts on `Z:\`.
+4. **Ingest path** — only after quality pass + publish/`DONE.json` discipline (`2_生產線/_handbooks/homelab/DATA_PLANE.md`); do not invent job layouts on `Z:\`.
 5. **Do not** promote Arabic-Qwen3.5-OCR-v4 to trunk; do not bump main `transformers` to 5.x (breaks MinerU).
 
 Out of scope unless asked: Paper1, marking schemes, Docling replacement, N-up.
@@ -218,4 +239,4 @@ pipeline:
 
 ## 9. One-line summary for Codex
 
-**2015p2 MCQ pipeline is green (45/45 ABCD + quality pass); keep Stage3 sanitize + question-block merge; next = teacher QA / multi-year / compile / ingest — not new layout packages or Arabic OCR trunk swap.**
+**2015p2 MCQ pipeline is green (45/45 ABCD + quality pass); PaddleOCR-VL is primary, Qwen3-VL is fallback, and Stage3 remains sanitize.**

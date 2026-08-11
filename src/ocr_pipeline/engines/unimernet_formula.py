@@ -21,7 +21,7 @@ def _load_unimernet_model(*, device: str) -> Any:
     except ImportError as exc:
         raise EngineError(
             "UniMERNet requires MinerU. Install it with "
-            "`pip install -r requirements-mineru-ppocr.txt`."
+            "`uv sync --group mineru`."
         ) from exc
     try:
         weight_dir = os.path.join(

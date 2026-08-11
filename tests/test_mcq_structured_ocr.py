@@ -12,12 +12,26 @@ from ocr_pipeline.mcq_structured import (
     McqChoices,
     McqOcrResult,
     parse_stage2_text,
+    render_span_json,
     render_text,
 )
 from ocr_pipeline.models import BBox, BlockType, LayoutBlock, PageResult
 from ocr_pipeline.pipeline import _write_questions_jsonl, check_mcq_coverage
 from ocr_pipeline.routers import TextRouter
 from ocr_pipeline.vlm_client import QwenVlClient, build_mcq_structured_client, build_vlm_client
+from ocr_pipeline.mcq_structured import (
+    InstructorMcqOcrClient,
+    McqChoices,
+    McqOcrResult,
+    McqSpanChoices,
+    McqSpanOcrResult,
+    OcrSpan,
+    parse_span_json,
+    parse_stage2_text,
+    render_span_result,
+    render_spans,
+    render_text,
+)
 
 
 def _result(**overrides) -> McqOcrResult:
@@ -93,6 +107,98 @@ def test_local_stage2_parser_rejects_missing_or_misordered_choices():
 def test_local_stage2_parser_marks_uncertain_tokens_for_review():
     result = parse_stage2_text("stem ?\nA. one\nB. two\nC. three\nD. four")
     assert result.uncertain_tokens
+    assert result.requires_review is True
+
+
+def test_local_stage2_parser_marks_paddle_image_choices_for_review():
+    raw = """
+<div style="text-align: center;">32.</div>
+<div><img src="question.jpg" alt="Image" /></div>
+上圖所示為 $y=ab^x$ 的圖像。下列哪一個圖像正確？
+<div>A.</div><div><img src="a.jpg" alt="Image" /></div>
+<div>B.</div><div><img src="b.jpg" alt="Image" /></div>
+<div>C.</div><div><img src="c.jpg" alt="Image" /></div>
+<div>D.</div><div><img src="d.jpg" alt="Image" /></div>
+"""
+
+    result = parse_stage2_text(raw)
+
+    assert result.stem == "上圖所示為 $y=ab^x$ 的圖像。下列哪一個圖像正確？"
+    assert result.choices.model_dump() == {
+        "A": "[圖像選項，見原題 crop]",
+        "B": "[圖像選項，見原題 crop]",
+        "C": "[圖像選項，見原題 crop]",
+        "D": "[圖像選項，見原題 crop]",
+    }
+    assert result.requires_review is True
+    assert result.warnings == ["image-only choices retained in question crop"]
+
+
+def test_local_stage2_parser_removes_paddle_html_from_text_choices():
+    raw = """
+20. 圖中，求角的大小。
+A. $24^{\\circ}$
+B. $27^{\\circ}$
+C. $30^{\\circ}$
+D. $33^{\\circ}$
+<div><img src="question.jpg" alt="Image" /></div>
+"""
+
+    result = parse_stage2_text(raw)
+
+    assert result.choices.D == "$33^{\\circ}$"
+    assert "<img" not in result.stem
+    assert result.requires_review is True
+    assert result.warnings == ["figures retained in question crop"]
+
+
+def test_local_stage2_parser_flattens_paddle_html_table_into_stem():
+    raw = """
+30. 考慮以下整數：
+<table><tr><td>2</td><td>3</td><td>5</td><td>m</td></tr></table>
+設 $p$、$q$ 及 $r$ 分別為平均值、中位數及眾數。
+A. 只有 I
+B. 只有 II
+C. 只有 I 及 III
+D. 只有 II 及 III
+"""
+
+    result = parse_stage2_text(raw)
+
+    assert result.stem == (
+        "考慮以下整數：2 3 5 m 設 $p$、$q$ 及 $r$ 分別為平均值、中位數及眾數。"
+    )
+    assert "<table" not in result.stem
+    assert "<td" not in result.stem
+    assert result.requires_review is True
+    assert result.warnings == ["HTML table flattened to inline text"]
+
+
+def test_local_stage2_parser_recovers_four_unlabelled_paddle_choices():
+    raw = """
+17. 圖中，第一行題幹。
+第二行題幹仍屬於同一句。
+
+$$12\\mathrm{~cm}^{2}$$
+
+$$18\\mathrm{~cm}^{2}$$
+
+$$20\\mathrm{~cm}^{2}$$
+
+$$27\\mathrm{~cm}^{2}$$
+
+<div><img src="question.jpg" alt="Image" /></div>
+"""
+
+    result = parse_stage2_text(raw)
+
+    assert result.stem == "圖中，第一行題幹。第二行題幹仍屬於同一句。"
+    assert result.choices.model_dump() == {
+        "A": "$$12\\mathrm{~cm}^{2}$$",
+        "B": "$$18\\mathrm{~cm}^{2}$$",
+        "C": "$$20\\mathrm{~cm}^{2}$$",
+        "D": "$$27\\mathrm{~cm}^{2}$$",
+    }
     assert result.requires_review is True
 
 
@@ -184,6 +290,7 @@ def test_mcq_stage3_remains_deterministic_sanitize():
 def test_questions_jsonl_keeps_text_and_adds_structured_ocr(tmp_path):
     block = _block(1, text="1. legacy\nA. 1\nB. 2\nC. 3\nD. 4")
     block.meta["structured_ocr"] = _result().model_dump(mode="json")
+    block.meta["structured_ocr_source"] = "local_span_json"
     page = PageResult(
         page=2,
         image_path=Path("page.png"),
@@ -196,6 +303,7 @@ def test_questions_jsonl_keeps_text_and_adds_structured_ocr(tmp_path):
     row = json.loads(out.read_text(encoding="utf-8"))
     assert row["text"] == block.raw_text
     assert row["structured_ocr"]["choices"] == {"A": "1", "B": "2", "C": "3", "D": "4"}
+    assert row["structured_ocr_source"] == "local_span_json"
 
 
 def test_questions_jsonl_without_structured_data_is_backward_compatible(tmp_path):
@@ -207,6 +315,7 @@ def test_questions_jsonl_without_structured_data_is_backward_compatible(tmp_path
     row = json.loads(out.read_text(encoding="utf-8"))
     assert row["text"] == block.raw_text
     assert row["structured_ocr"] is None
+    assert row["structured_ocr_source"] is None
 
 
 def test_q1_to_q45_coverage_check():
@@ -320,8 +429,10 @@ def test_local_mcq_validation_renders_stem_and_choices_as_five_lines():
         "C. 16。\n"
         "D. 2k。"
     )
+    assert len(block.raw_text.splitlines()) == 5
+    assert block.meta["structured_ocr_source"] == "local_stage2_fallback"
 
-    def test_parser_removes_layout_spaces_around_chinese_punctuation():
+def test_parser_removes_layout_spaces_around_chinese_punctuation():
         raw = """設
                 k
                 為一常數。若
@@ -338,3 +449,197 @@ def test_local_mcq_validation_renders_stem_and_choices_as_five_lines():
         assert result.stem == (
             "設 k 為一常數。若 f(x)=2x^{2}-5x+k，則 $f(2)-f(-2)=$"
     )
+
+def test_ocr_span_accepts_only_text_or_math():
+        text_span = OcrSpan(kind="text", content="設")
+        math_span = OcrSpan(kind="math", content="x^2")
+
+        assert text_span.content == "設"
+        assert math_span.content == "x^2"
+
+        with pytest.raises(ValidationError):
+            OcrSpan(kind="formula", content="x^2")
+
+        with pytest.raises(ValidationError):
+            OcrSpan(kind="math", content="")
+
+def test_render_spans_formats_text_and_math_in_one_line():
+        spans = [
+            OcrSpan(kind="text", content="設"),
+            OcrSpan(kind="math", content="k"),
+            OcrSpan(kind="text", content="為一常數。若"),
+            OcrSpan(
+                kind="math",
+                content="f(x)=2x^{2}-5x+k",
+            ),
+            OcrSpan(kind="text", content="，則"),
+            OcrSpan(
+                kind="math",
+                content="f(2)-f(-2)=",
+            ),
+    ]
+
+        assert render_spans(spans) == (
+            "設 $k$ 為一常數。若 "
+            "$f(x)=2x^{2}-5x+k$，則 "
+            "$f(2)-f(-2)=$"
+        )
+
+
+def test_render_spans_escapes_currency_dollar_in_text_span():
+    spans = [OcrSpan(kind="text", content="$50 000")]
+
+    assert render_spans(spans) == r"\$50 000"
+
+
+def test_render_span_result_outputs_exactly_five_lines():
+    result = McqSpanOcrResult(
+        stem=[
+            OcrSpan(kind="text", content="設"),
+            OcrSpan(kind="math", content="k"),
+            OcrSpan(kind="text", content="為一常數。若"),
+            OcrSpan(kind="math", content="f(x)=2x^{2}-5x+k"),
+            OcrSpan(kind="text", content="，則"),
+            OcrSpan(kind="math", content="f(2)-f(-2)="),
+        ],
+        choices=McqSpanChoices(
+            A=[OcrSpan(kind="math", content="-20")],
+            B=[OcrSpan(kind="math", content="0")],
+            C=[OcrSpan(kind="math", content="16")],
+            D=[OcrSpan(kind="math", content="2k")],
+        ),
+    )
+
+    assert render_span_result(6, result) == (
+        "6. 設 $k$ 為一常數。若 $f(x)=2x^{2}-5x+k$，則 $f(2)-f(-2)=$\n"
+        "A. $-20$\n"
+        "B. $0$\n"
+        "C. $16$\n"
+        "D. $2k$"
+    )
+
+
+def test_render_span_result_removes_a_repeated_stage1_question_id():
+    result = McqSpanOcrResult(
+        stem=[OcrSpan(kind="text", content="6. 設 k 為常數")],
+        choices=McqSpanChoices(
+            A=[OcrSpan(kind="text", content="1")],
+            B=[OcrSpan(kind="text", content="2")],
+            C=[OcrSpan(kind="text", content="3")],
+            D=[OcrSpan(kind="text", content="4")],
+        ),
+    )
+
+    assert render_span_result(6, result).splitlines()[0] == "6. 設 k 為常數"
+
+
+def test_parse_span_json_validates_qwen_output():
+    raw = json.dumps(
+        {
+            "stem": [
+                {"kind": "text", "content": "設"},
+                {"kind": "math", "content": "k"},
+                {"kind": "text", "content": "為一常數。"},
+            ],
+            "choices": {
+                "A": [{"kind": "math", "content": "-20"}],
+                "B": [{"kind": "math", "content": "0"}],
+                "C": [{"kind": "math", "content": "16"}],
+                "D": [{"kind": "math", "content": "2k"}],
+            },
+        },
+        ensure_ascii=False,
+    )
+
+    result = parse_span_json(raw)
+
+    assert result.stem[1].kind == "math"
+    assert result.stem[1].content == "k"
+    assert result.choices.D[0].content == "2k"
+
+
+def test_parse_span_json_rejects_invalid_kind():
+    raw = json.dumps(
+        {
+            "stem": [
+                {"kind": "formula", "content": "x^2"},
+            ],
+            "choices": {
+                "A": [{"kind": "text", "content": "1"}],
+                "B": [{"kind": "text", "content": "2"}],
+                "C": [{"kind": "text", "content": "3"}],
+                "D": [{"kind": "text", "content": "4"}],
+            },
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(ValidationError):
+        parse_span_json(raw)
+
+def test_render_span_json_parses_and_renders_qwen_output():
+    raw = """
+{
+  "stem": [
+    {"kind": "text", "content": "設"},
+    {"kind": "math", "content": "k"},
+    {"kind": "text", "content": "為一常數。若"},
+    {"kind": "math", "content": "f(x)=2x^{2}-5x+k"},
+    {"kind": "text", "content": "，則"},
+    {"kind": "math", "content": "f(2)-f(-2)="}
+  ],
+  "choices": {
+    "A": [{"kind": "math", "content": "-20"}],
+    "B": [{"kind": "math", "content": "0"}],
+    "C": [{"kind": "math", "content": "16"}],
+    "D": [{"kind": "math", "content": "2k"}]
+  }
+}
+"""
+
+    assert render_span_json(6, raw) == (
+        "6. 設 $k$ 為一常數。若 $f(x)=2x^{2}-5x+k$，則 $f(2)-f(-2)=$\n"
+        "A. $-20$\n"
+        "B. $0$\n"
+        "C. $16$\n"
+        "D. $2k$"
+    )
+
+def test_local_mcq_validation_renders_span_json_as_five_lines():
+    class JsonEngine:
+        def ocr(self, crop_path, *, prompt=None):
+            return """
+{
+  "stem": [
+    {"kind": "text", "content": "設"},
+    {"kind": "math", "content": "k"},
+    {"kind": "text", "content": "為一常數。若"},
+    {"kind": "math", "content": "f(x)=2x^{2}-5x+k"},
+    {"kind": "text", "content": "，則"},
+    {"kind": "math", "content": "f(2)-f(-2)="}
+  ],
+  "choices": {
+    "A": [{"kind": "math", "content": "-20"}],
+    "B": [{"kind": "math", "content": "0"}],
+    "C": [{"kind": "math", "content": "16"}],
+    "D": [{"kind": "math", "content": "2k"}]
+  }
+}
+"""
+
+    block = _block(6)
+
+    TextRouter(
+        text_engine=JsonEngine(),
+        local_mcq_validation_enabled=True,
+    ).process(block)
+
+    assert block.raw_text == (
+        "6. 設 $k$ 為一常數。若 $f(x)=2x^{2}-5x+k$，則 $f(2)-f(-2)=$\n"
+        "A. $-20$\n"
+        "B. $0$\n"
+        "C. $16$\n"
+        "D. $2k$"
+    )
+
+    assert block.meta["structured_ocr_source"] == "local_span_json"

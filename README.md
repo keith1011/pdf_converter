@@ -64,7 +64,7 @@ Useful options:
 - `--output-tag TAG`
 - `--check-compile`
 
-`pdf_to_images.py` remains a lightweight page-rendering utility used by the
+`1_收集資料/_scripts/pdf_to_images.py` remains a lightweight page-rendering utility used by the
 cross-year layout runner.
 
 ## Tests

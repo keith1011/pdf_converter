@@ -1,0 +1,12 @@
+{
+  "labels": [
+    {"text": "B", "kind": "latin_letter"},
+    {"text": "β", "kind": "greek_letter"},
+    {"text": "C", "kind": "latin_letter"},
+    {"text": "A", "kind": "latin_letter"},
+    {"text": "α", "kind": "greek_letter"},
+    {"text": "D", "kind": "latin_letter"}
+  ],
+  "confidence": 0.94,
+  "needs_review": true
+}

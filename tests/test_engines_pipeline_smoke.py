@@ -1,8 +1,9 @@
-
 from ocr_pipeline.assemble import FinalPolisher
 from ocr_pipeline.cli_report import WarnCollector
+from ocr_pipeline.engines.paddleocr_vl_text import PaddleOcrVlTextEngine
 from ocr_pipeline.engines.ppocr_text import PpocrTextEngine
-from ocr_pipeline.factory import build_default_pipeline
+from ocr_pipeline.engines.vlm_text import VlmTextEngine
+from ocr_pipeline.factory import build_default_pipeline, load_ocr_config
 from ocr_pipeline.models import BBox, BlockType, LayoutBlock
 from ocr_pipeline.pipeline import PipelineManager
 
@@ -17,9 +18,7 @@ class ImageSource:
 
 class LayoutEngine:
     def analyze(self, image_path, page):
-        return [
-            LayoutBlock("b0", BlockType.TEXT, BBox(0, 0, 10, 10), 0, page, image_path)
-        ]
+        return [LayoutBlock("b0", BlockType.TEXT, BBox(0, 0, 10, 10), 0, page, image_path)]
 
     def release(self):
         pass
@@ -85,9 +84,53 @@ def test_factory_builds_ppocr_text_engines():
     assert isinstance(manager.router.text_router.table_engine, PpocrTextEngine)
 
 
+def test_factory_builds_paddleocr_vl_text_engines():
+    manager = build_default_pipeline({"engines": {"text": "paddleocr_vl"}})
+
+    assert isinstance(manager.router.text_router.text_engine, PaddleOcrVlTextEngine)
+    assert isinstance(manager.router.text_router.table_engine, PaddleOcrVlTextEngine)
+    assert manager.router.text_router.text_engine is manager.router.text_router.table_engine
+    assert manager.polisher.mcq_stage3 == "paddle_sanitize"
+
+
+def test_factory_wires_paddleocr_vl_low_memory_options():
+    manager = build_default_pipeline(
+        {
+            "engines": {"text": "paddleocr_vl"},
+            "paddleocr_vl": {
+                "use_layout_detection": False,
+                "max_pixels": 1_048_576,
+                "precision": "fp16",
+            },
+        }
+    )
+
+    engine = manager.router.text_router.text_engine
+    assert isinstance(engine, PaddleOcrVlTextEngine)
+    assert engine.use_layout_detection is False
+    assert engine.max_pixels == 1_048_576
+    assert engine.precision == "fp16"
+
+
+def test_default_config_enables_paddleocr_vl_crop_memory_limits():
+    paddle_cfg = load_ocr_config()["paddleocr_vl"]
+
+    assert paddle_cfg["use_layout_detection"] is False
+    assert paddle_cfg["max_pixels"] == 1_048_576
+    assert paddle_cfg["precision"] == "fp32"
+
+
+def test_factory_builds_qwen_vlm_fallback():
+    manager = build_default_pipeline({"engines": {"text": "vlm"}})
+
+    assert isinstance(manager.router.text_router.text_engine, VlmTextEngine)
+
+
 def test_factory_wires_skip_figures_from_pipeline_config():
     on = build_default_pipeline({"pipeline": {"skip_figures": True}})
     off = build_default_pipeline({"pipeline": {"skip_figures": False}})
+    assert isinstance(on.router.text_router.text_engine, PaddleOcrVlTextEngine)
+    assert on.polisher.mcq_stage3 == "paddle_sanitize"
     assert on.router.skip_figures is True
     assert off.router.skip_figures is False
 

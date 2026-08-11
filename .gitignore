@@ -1,13 +1,13 @@
 # Local / runtime
-.venv/
-.venv-engines312/
-.venv-mineru312/
-.venv-arabic-ocr/
+.venv*/
 venv*/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.pytest-*/
 .ruff_cache/
+.uv-cache/
+.playwright-mcp/
 .ty/
 .cache/
 huggingface/

@@ -25,7 +25,7 @@ def _load_got_model(*, model_id: str) -> tuple[Any, Any]:
     except ImportError as exc:
         raise EngineError(
             "GOT-OCR requires transformers. Install it with "
-            "`pip install -r requirements-got-ppocr.txt`."
+            "`uv sync --group got`."
         ) from exc
     try:
         processor = AutoProcessor.from_pretrained(model_id, use_fast=True)

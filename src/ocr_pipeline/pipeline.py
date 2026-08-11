@@ -50,6 +50,7 @@ def _write_questions_jsonl(path: Path, pages: list[PageResult]) -> int:
                     "crop_path": str(b.crop_path) if b.crop_path else None,
                     "text": text,
                     "structured_ocr": b.meta.get("structured_ocr"),
+                    "structured_ocr_source": b.meta.get("structured_ocr_source"),
                 }
             )
     rows.sort(key=lambda r: r["question_id"])
@@ -232,6 +233,9 @@ class PipelineManager:
                 print(f"=== Stage2 route page {pr.page} ===")
                 pr.blocks = self.router.route_page(pr.blocks)
                 pr.draft = self.assembler.stitch(pr.blocks)
+
+        if release_router := getattr(self.router, "release", None):
+            release_router()
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 

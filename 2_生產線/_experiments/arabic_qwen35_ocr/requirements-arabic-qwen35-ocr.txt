@@ -1,0 +1,15 @@
+# Isolated env for sherif1313/Arabic-Qwen3.5-OCR-v4
+# Requires transformers>=5.3 (Qwen3_5ForConditionalGeneration).
+# Do NOT install into main .venv — trunk pins transformers<5 for MinerU.
+#
+# Setup (from repo root):
+#   powershell -File 2_生產線/_experiments/arabic_qwen35_ocr/deploy_arabic_qwen35_ocr.ps1
+
+transformers>=5.3.0
+accelerate>=1.0.0
+qwen-vl-utils>=0.0.14
+pillow>=10.0.0
+safetensors>=0.4.0
+sentencepiece>=0.2.0
+protobuf>=4.0.0
+# Install torch separately with CUDA index in deploy script.

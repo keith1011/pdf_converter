@@ -137,3 +137,12 @@ FIGURE_CAPTION_PROMPT = """你正在看一張試卷／講義中的圖（圖表�
 - 不要發明圖中沒有的數值或標籤；軸／頂點看不清可省略。
 - 僅當圖糊到無法判斷類型時，才寫「圖示（細節不清）」。
 """
+
+MCQ_ROUTER_PROMPT = """轉錄一道數學多項選擇題，只輸出一個有效 JSON object：
+{"stem":[{"kind":"text 或 math","content":"..."}],"choices":{"A":[],"B":[],"C":[],"D":[]}}
+規則：
+1. 由你判斷並分開普通文字 text 與數學內容 math。
+2. math 使用 LaTeX，不加 `$`；貨幣的 literal dollar 寫作 `\\$`。
+3. 如實保留可見文字、符號、公式與圖形標籤；不要解題、計算、作答或解釋。
+4. 必須有 A、B、C、D 四個選項；每個選項必須是非空 span object array，不能是 string，content 不能空；content 不加題號、選項標籤或多餘換行。
+5. 不要 Markdown code fence。"""

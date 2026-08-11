@@ -61,7 +61,7 @@ PC-C (辦公室筆電)
 | MCP / Chat / B agent | — | **reader only** |
 
 **Atomic publish:** `.incoming/<job_id>/`（無 DONE）→ 校驗 sha256 → 寫 `DONE.json` → `mv` 到 `jobs/<job_id>/` → ingest **只掃** `jobs/`.  
-Contract: `homelab/DATA_PLANE.md` + design `DONE.json` schema.
+Contract: `2_生產線/_handbooks/homelab/DATA_PLANE.md` + design `DONE.json` schema.
 
 ---
 
@@ -69,9 +69,9 @@ Contract: `homelab/DATA_PLANE.md` + design `DONE.json` schema.
 
 ### OCR engine comparison
 
-- Spec: `docs/superpowers/specs/2026-07-23-ocr-engine-adapters-design.md`
-- Plan: `docs/superpowers/plans/2026-07-23-ocr-engine-adapters.md`
-- Scorecard: `docs/superpowers/evals/p-ocr-branch-scorecard.md`
+- Spec: `2_生產線/_history/specs/2026-07-23-ocr-engine-adapters-design.md`
+- Plan: `2_生產線/_history/plans/2026-07-23-ocr-engine-adapters.md`
+- Scorecard: `3.分析結果/_reports/p-ocr-branch-scorecard.md`
 - Branches: `qwen-vl`, `got-ppocr`, `mineru-ppocr`
 
 ### Green
@@ -216,7 +216,7 @@ PDF → page images
 | Samba on A | `Z:\` → `\\192.168.1.107\pdf-scaner` (B `/data/pdf-scaner`) |
 | Jobs example | `Z:\jobs\20260723-005247-123` |
 | Ingest code | `homelab/ingest/` (`done.py`, `publish.py`, `ingest.py`) |
-| Contract | `homelab/DATA_PLANE.md`, `homelab/README.md` |
+| Contract | `2_生產線/_handbooks/homelab/DATA_PLANE.md`, `2_生產線/_handbooks/homelab/README.md` |
 | Embedding | On **A**: `nomic-ai/nomic-embed-text-v1.5` (768-d) |
 | Collections | MCP `memories` ≠ 題庫 collection (`exam_segments_v1`) |
 
@@ -249,7 +249,7 @@ Rules: `planning-with-files`, `mcp-routing` (`.cursor/rules/`).
 
 ### Skills — when to invoke
 
-Project `CLAUDE.md` routing applies. When in doubt, invoke the skill.
+Archived routing reference: `2_生產線/_archive/CLAUDE.md`.
 
 | Skill / rule | When |
 |--------------|------|

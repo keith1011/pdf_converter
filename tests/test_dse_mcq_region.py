@@ -362,6 +362,9 @@ def test_formula_ocr_junk_not_stem_opener():
     ]
     regions = detect_mcq_regions(lines, profile)
     assert [r.question_id for r in regions] == [1, 2, 3]
+    # The short formula line overlaps the printed qid vertically and belongs
+    # to Q1 even though it does not resemble prose.
+    assert regions[0].bbox[1] <= 92
     assert regions[0].bbox[3] < regions[1].bbox[1] + 5
 
 

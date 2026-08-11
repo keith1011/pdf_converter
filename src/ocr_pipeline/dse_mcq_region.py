@@ -362,7 +362,8 @@ def _preamble_start(
 ) -> int:
     """Include nearby stem-prose above the opener; do not swallow figure crumbs / A–D."""
     start = stem_at
-    stem_y1 = tagged[stem_at].line.bbox[1]
+    stem_line = tagged[stem_at].line
+    stem_y1, stem_y2 = stem_line.bbox[1], stem_line.bbox[3]
     i = stem_at - 1
     while i >= prev_close:
         kind = tagged[i].kind
@@ -371,6 +372,10 @@ def _preamble_start(
         line = tagged[i].line
         if stem_y1 - line.bbox[3] > profile.preamble_max_gap_px:
             break
+        if line.bbox[1] <= stem_y2 and line.bbox[3] >= stem_y1:
+            start = i
+            i -= 1
+            continue
         if not _looks_like_stem_preamble(line.text):
             break
         start = i

@@ -1,0 +1,122 @@
+[
+  {
+    "doc": "2012p2",
+    "pages": 15,
+    "segments": 535,
+    "prose": 365,
+    "math": 151,
+    "figure": 19,
+    "fig_png": 19,
+    "captions": [
+      [
+        "figures/p003_b007.png",
+        "二次函數圖像。"
+      ],
+      [
+        "figures/p005_b008.png",
+        "直角三角形與正方形的組合。"
+      ],
+      [
+        "figures/p006_b004.png",
+        "圖示（細節不清）"
+      ]
+    ],
+    "empty_cap": 0
+  },
+  {
+    "doc": "2013p2",
+    "pages": 15,
+    "segments": 675,
+    "prose": 488,
+    "math": 165,
+    "figure": 22,
+    "fig_png": 22,
+    "captions": [
+      [
+        "figures/p003_b008.png",
+        "二次函數圖像。"
+      ],
+      [
+        "figures/p005_b006.png",
+        "圖示（細節不清）"
+      ],
+      [
+        "figures/p005_b008.png",
+        "圖示（細節不清）"
+      ]
+    ],
+    "empty_cap": 0
+  },
+  {
+    "doc": "2014-DSE-MATH-CP-2",
+    "pages": 8,
+    "segments": 431,
+    "prose": 265,
+    "math": 147,
+    "figure": 19,
+    "fig_png": 19,
+    "captions": [
+      [
+        "figures/p002_b028.png",
+        "二次函數圖像。"
+      ],
+      [
+        "figures/p002_b020.png",
+        "圖示（細節不清）"
+      ],
+      [
+        "figures/p003_b023.png",
+        "圖示（細節不清）"
+      ]
+    ],
+    "empty_cap": 0
+  },
+  {
+    "doc": "2015p2",
+    "pages": 15,
+    "segments": 533,
+    "prose": 331,
+    "math": 188,
+    "figure": 14,
+    "fig_png": 14,
+    "captions": [
+      [
+        "figures/p004_b002.png",
+        "二次函數圖像。"
+      ],
+      [
+        "figures/p005_b003.png",
+        "圖示（細節不清）"
+      ],
+      [
+        "figures/p005_b010.png",
+        "直角三角形與正方形的組合圖。"
+      ]
+    ],
+    "empty_cap": 0
+  },
+  {
+    "doc": "2016p2",
+    "pages": 15,
+    "segments": 592,
+    "prose": 419,
+    "math": 154,
+    "figure": 19,
+    "fig_png": 19,
+    "captions": [
+      [
+        "figures/p004_b008.png",
+        "二次函數的圖像。"
+      ],
+      [
+        "figures/p004_b006.png",
+        "圖示（細節不清）"
+      ],
+      [
+        "figures/p004_b012.png",
+        "二次函數的圖像。"
+      ]
+    ],
+    "empty_cap": 0
+  }
+]

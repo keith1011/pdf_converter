@@ -1,5 +1,5 @@
 # P-ocr feedstock OCR — uv / pyproject is the install source of truth.
-# Trunk OCR: MinerU layout + Qwen text/formula (default-groups include `mineru`).
+# Trunk OCR: MinerU layout + PaddleOCR-VL text + Qwen3-VL formula/fallback (default-groups include `mineru`).
 # transformers pinned <5 for MinerU + Qwen coexistence.
 # Windows torch CUDA uses the pytorch-cu126 index below.
 # Optional Surya still: `uv pip install surya-ocr --no-deps` (Pillow pin issues).
@@ -17,6 +17,7 @@ dependencies = [
     "filetype>=1.2",
     "instructor>=1.15.4",
     "openai>=2.48.0",
+    "opencc-python-reimplemented>=0.1.7",
     "opencv-python-headless>=4.8",
     "pillow>=10.0.0",
     "platformdirs>=4.0",
@@ -27,6 +28,7 @@ dependencies = [
     "pypdfium2>=4.30",
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
+    "qdrant-client>=1.19.0",
     "torch>=2.13.0",
     "torchvision>=0.19.0",
     "transformers>=4.49,<5",
@@ -37,7 +39,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ocr_pipeline"]
+packages = ["src/ocr_pipeline", "src/figure_pipeline"]
 
 [[tool.uv.index]]
 name = "pytorch-cu126"

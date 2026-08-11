@@ -98,6 +98,7 @@ class TextRouter:
 
     def process(self, block: LayoutBlock) -> LayoutBlock:
         assert block.crop_path is not None
+
         prompt = self._prompt_for(block)
         engine = self.table_engine if block.block_type == BlockType.TABLE else self.text_engine
         if engine is not None:
@@ -116,27 +117,44 @@ class TextRouter:
             ).strip()
         self._attach_local_mcq_validation(block)
         self._attach_mcq_structured_ocr(block, prompt)
+
         return block
 
     def _attach_local_mcq_validation(self, block: LayoutBlock) -> None:
         if not self.local_mcq_validation_enabled:
             return
+
         question_id = block.meta.get("question_id")
         if not isinstance(question_id, int):
             return
-        from .mcq_structured import parse_stage2_text, render_text
+
+        from .mcq_structured import (
+            parse_span_json,
+            parse_stage2_text,
+            render_span_result,
+            render_text,
+        )
+
+        raw_text = block.raw_text or ""
 
         try:
-            result = parse_stage2_text(block.raw_text or "")
+            result = parse_span_json(raw_text)
+            block.meta["structured_ocr"] = result.model_dump(mode="json")
+            block.meta["structured_ocr_source"] = "local_span_json"
+            block.raw_text = render_span_result(question_id, result)
+            return
+        except Exception:
+            pass
+
+        try:
+            result = parse_stage2_text(raw_text)
+            block.meta["structured_ocr"] = result.model_dump(mode="json")
+            block.meta["structured_ocr_source"] = "local_stage2_fallback"
+            block.raw_text = render_text(question_id, result)
         except Exception as exc:
             block.meta["structured_ocr"] = None
-            block.meta["structured_ocr_source"] = "local_stage2"
+            block.meta["structured_ocr_source"] = "local_validation_failed"
             block.meta["structured_ocr_error"] = type(exc).__name__
-            return
-        block.meta["structured_ocr"] = result.model_dump(mode="json")
-        block.meta["structured_ocr_source"] = "local_stage2"
-
-        block.raw_text = render_text(question_id, result)
 
     def _attach_mcq_structured_ocr(self, block: LayoutBlock, prompt: str) -> None:
         question_id = block.meta.get("question_id")
@@ -183,6 +201,14 @@ class DynamicRouter:
         self.crop_dir = crop_dir
         self.skip_figures = skip_figures
         self.crop_dir.mkdir(parents=True, exist_ok=True)
+
+    def release(self) -> None:
+        engines = (self.math_router.formula_engine, self.text_router.text_engine, self.text_router.table_engine)
+        released: set[int] = set()
+        for engine in engines:
+            if engine is not None and id(engine) not in released and hasattr(engine, "release"):
+                engine.release()
+                released.add(id(engine))
 
     def crop(self, block: LayoutBlock) -> Path:
         from PIL import Image

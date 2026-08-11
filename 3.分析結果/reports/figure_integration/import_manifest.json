@@ -1,0 +1,317 @@
+{
+    "schema_version":  "1.0",
+    "source_package":  "main_figure_integration_2026-08-10/files",
+    "source_figure_commit":  "9396a107",
+    "target_commit_before_integration":  "d8d1171",
+    "files":  [
+                  {
+                      "path":  "3.分析結果/docs/figure_pipeline/progress.md",
+                      "sha256":  "62404b261a6ca53b5e9b633e385b69bb717312a21d566e3272c3c06b0431b8bb"
+                  },
+                  {
+                      "path":  "3.分析結果/docs/figure_pipeline/sequence_order_metric_v1.md",
+                      "sha256":  "40f6f1d34c173e5e86820c007fcd28c08773946c288ed8b6bf11dfc8623bab2d"
+                  },
+                  {
+                      "path":  "3.分析結果/docs/FIGURE_PIPELINE_HANDOFF.md",
+                      "sha256":  "c3b7f189121eaf50f298ee2d3f59ccfa34ee2ddff6be0d01e073bfa608a133a8"
+                  },
+                  {
+                      "path":  "3.分析結果/evals/figure_pipeline/b3_sequence_order_gold_v1.json",
+                      "sha256":  "5dc2946779db7c2f57f0f4e4e82d6d8f245bac54dea0a24ffe4923cd1b203060"
+                  },
+                  {
+                      "path":  "config/ocr_pipeline.yaml",
+                      "sha256":  "30819c88f7cbf8f0d2d7791f138e8e7ce260023255247c08f608a27fefb5b2f6"
+                  },
+                  {
+                      "path":  "docs/superpowers/plans/2026-08-10-figure-pipeline-integration.md",
+                      "sha256":  "8e76d7dfca2d9a5cdb35a1d3368ffae0e108caef0acc99fd64d5048188b40e80"
+                  },
+                  {
+                      "path":  "docs/superpowers/specs/2026-08-10-figure-pipeline-integration-design.md",
+                      "sha256":  "f16e3f439ad7dd72e3ecbe78bd33bc591fd64ed5874bf1f5ca4fe6069d9a7add"
+                  },
+                  {
+                      "path":  "pyproject.toml",
+                      "sha256":  "3525a75f7aaa82762a92a641597b3bb370dd41e1db8cad0e15ba1255f29777f5"
+                  },
+                  {
+                      "path":  "scripts/evaluate_b3_sequence_order.py",
+                      "sha256":  "1995122448e48f10c31ac81a0a5956158a05ffa668bcc2e4e55ab4354dada693"
+                  },
+                  {
+                      "path":  "scripts/phase_b1_figure_asset.py",
+                      "sha256":  "13a6b90a5bee8c9016ef1df9790a12c52ff3a10f725cf58cd1af631c20def360"
+                  },
+                  {
+                      "path":  "scripts/phase_b2_figure_classify.py",
+                      "sha256":  "d3643adc78e3d35b31e3588c0487a4c678c7a5635e2083cea10a8939adb47978"
+                  },
+                  {
+                      "path":  "scripts/phase_b3_visible_labels.py",
+                      "sha256":  "a51f061faf7aa46c56b994f073f69adae073f38a3a51c821bb25e997fa383dfb"
+                  },
+                  {
+                      "path":  "scripts/run_figure_pipeline.py",
+                      "sha256":  "5cf83f5d4f9f547264fab9d21cddb68622a0a48e91131c1198a6507fd4f2d533"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/__init__.py",
+                      "sha256":  "4ec0e09f2d96f5900e0e5542390ecaddb0cc3cc8bbaf67c1694377b73e248416"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/classification_cli.py",
+                      "sha256":  "fe868aa53f9b3480c9a84b6573fae8e3c53a6a541762c42f150af24d9ac8447d"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/classification_models.py",
+                      "sha256":  "5f8f84215515c79ab6d3cf041ce6c3529ae1bab8aab1f11fdaabf3703cd6f573"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/classification_parser.py",
+                      "sha256":  "240660b410389d86284b0f322ea19d25352167c7cbc19982e04d1279c6c69687"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/classification_prompt.py",
+                      "sha256":  "448b409b202222077a0ec427b53d34a82c444fdd674dcea5d88b58bc595d2c5d"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/classification_review.py",
+                      "sha256":  "cd9278d94265907807dedc2eaddd1c3707c2fa31fd307a860cec20531c3664b2"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/classification_runner.py",
+                      "sha256":  "4cbe7fc7f4b6faa8fca6c8a54241c85218a8c01b2af588069a5c326b2a8d92e8"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/cli.py",
+                      "sha256":  "e58f40d0a963ee77ea7c367e82d9cc5414c63fd40f4c4f106de6abaf96741287"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/detectors/__init__.py",
+                      "sha256":  "34d4a942b0c423051a051ae41a4a5c75aac2e300eae38ed3f32d44e45b844d38"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/detectors/base.py",
+                      "sha256":  "dae9632b82d0849cb097e6c1d30dc726fa7a54cc86bdc7f77bc0bc5b2b85e547"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/detectors/mineru.py",
+                      "sha256":  "1f0f72ef630c1445ed3c4d397e4b7e1bec45ac74cb4c6a877ce137da8d8fa4a2"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/label_ocr_cli.py",
+                      "sha256":  "af61c311d7571c85a6a458d73c0225b2faa928e0bfde9849170a93838f212c70"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/label_ocr_models.py",
+                      "sha256":  "3a6121f7c88ad0dda83ace062459d4213d653e97fcc1d94bd9403b0f7eff0d36"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/label_ocr_parser.py",
+                      "sha256":  "3b788dd92e6f23ebf2431aa07da9069eb511c0c0906d9fdf7d74828b3a830157"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/label_ocr_prompt.py",
+                      "sha256":  "3c29e6987fe26da67e5ddf0e2ebc5d6ba3536a2c8bbc55ebf8cbbdcc104be557"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/label_ocr_review.py",
+                      "sha256":  "28940b1255206732a1b9e9d89a3e8048a85e7f21d1392f2fe31faf0b0ce0e970"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/label_ocr_runner.py",
+                      "sha256":  "5feb3641bddaf818c6b7a39ff1648a5ffa67f22cdc8510a146cc8f03ac8c3423"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/models.py",
+                      "sha256":  "4788a3adcafd10787052a1e4fed98369f59ed932d43ef94376963b3b3b422c7f"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/pageir.py",
+                      "sha256":  "7773863850a838778854fd67d0d5f04f28e2eac7fff4822538e861e28cbcdb09"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/preserve.py",
+                      "sha256":  "326b0f8fd7e7feb9d4bf73ecf0cc89d1a9b8855391f299ea9817910cd05bf499"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/proposal.py",
+                      "sha256":  "b60f3b3dbafeaaed2b0b8806d58fff901a1613a2d5a13448390a2abf43eb32b1"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/publish.py",
+                      "sha256":  "d594f1f237ca6116d818f8a357b1fbaae5fb10653809174dd80cc57e814141c0"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/sequence_order_cli.py",
+                      "sha256":  "eafddfdeeff774063a0a573c05fdba04dc028639bd29d31ef8584d0f85055652"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/sequence_order_evaluator.py",
+                      "sha256":  "f35a7c0e0a469ad8c20c9192600c35d64a6f5b4887a8b006d77e3a53638779cf"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/sequence_order_metrics.py",
+                      "sha256":  "f5ee86eeda1b54ffe34a6e90deac7ec9da6e052ee0aaeb4689f1b5e825f07b2d"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/source.py",
+                      "sha256":  "1490143fd6bbd2cc6c569a5080887e8ff4d927a2c28a5bdaea60ec6674490b35"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/workflow.py",
+                      "sha256":  "eb7f4e3c452d8d94bb38032c3e05a34639d0e70967d03b2b0f373323baad3c1a"
+                  },
+                  {
+                      "path":  "src/figure_pipeline/workflow_cli.py",
+                      "sha256":  "237b21c35878f79cf00dda2b11c15d593874549510ab2f175285629869b6be4c"
+                  },
+                  {
+                      "path":  "src/ocr_pipeline/vlm_client.py",
+                      "sha256":  "0b77205a41d9a55ca2352d4a8c5b6a3b177c4d7a5c313b7b6766602d5e418299"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/__init__.py",
+                      "sha256":  "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/fixtures/qwen_geometry_response.txt",
+                      "sha256":  "96fc7e4a540dd39de4639dcb2bc3dcfd0543f077eb0d922f1a1b71c8f9dbada7"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/fixtures/qwen_invalid_response.txt",
+                      "sha256":  "6679c68d9b06d5125aa86cbc90f91255d0a59837ec4eaeeb916d176f56811a0d"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/fixtures/qwen_visible_labels_response.txt",
+                      "sha256":  "3a501e7dba02dca51cd834a78de5d2f91e77334e4608dcdbdf2e4f6c5029e180"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/helpers.py",
+                      "sha256":  "814924db955b90433408a15f19a4e920a976c7626953b61237279aef1bce7dc0"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_b2_acceptance.py",
+                      "sha256":  "bbf4b648461dbe53eb6dd9dcb74bdd8b2fe9a8a8ea2946a8a7c72d52b7643012"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_classification_cli.py",
+                      "sha256":  "db13cf9b8132039896ab39129a9c1e224dc925f5b3bdf2477000630f7600f0e4"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_classification_models.py",
+                      "sha256":  "e484e547462376783105a756c9132498afae4bc2d338c2457c47f0a78d3a078e"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_classification_parser.py",
+                      "sha256":  "f39f30438e0c073284c32b6bfb80cf6d47c5499b74983bd9d8ee32c181af3878"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_classification_review.py",
+                      "sha256":  "c61479a786cefe7a1d51a901559cd285beff84d7390d131455a952f2927d4d75"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_classification_runner.py",
+                      "sha256":  "2394abbea81a37e97cfd5e27bdba207352afb77f1875f5e79b436604a3220973"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_cli.py",
+                      "sha256":  "ec23e64e991acec6d5b1503c9b0c0da7472669faef364212521ec07de2333d3a"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_label_ocr_cli.py",
+                      "sha256":  "d4a51b836a1deee6989d2d8600942e7f572a6774e28247c370e223b97cf92238"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_label_ocr_models.py",
+                      "sha256":  "53ba19fc66e98575d7f2c955e71476dc71f93025c1b560c8d747c04b4b33141c"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_label_ocr_parser.py",
+                      "sha256":  "966c42c9524fb0230188b7b77d2f606c60d2b1989cd4ec0bd09f2e0e3f7367c5"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_label_ocr_prompt.py",
+                      "sha256":  "ccb703750a34493b927dcc35d87c8903dc16ec510d2ba5aea125c8519ae3c8bc"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_label_ocr_review.py",
+                      "sha256":  "722aa090234964d5483754740d457c7f1d99e1641488ad7f31f97129b038ba43"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_label_ocr_runner.py",
+                      "sha256":  "6624aa374edfe48e2f33b5d0832cf39f51cc170ced59b635bc532743fba72d81"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_legacy_boundary.py",
+                      "sha256":  "d6d89a3c72dc69af456e68863ac788106c9d440b9268bcac732a73a65fca906d"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_models.py",
+                      "sha256":  "e403bf948bf5169751775b9ed24aec13f1523ce8c9c275b5971c3e2974900e2c"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_pageir.py",
+                      "sha256":  "f3d8995d2fe01fc114cbb13291eb53f4b73d0f64dc22d5776fb18b424b070925"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_preserve.py",
+                      "sha256":  "32fef5cea8b86a722504996fd166183f8a5ec3ec7fea26a9a5dfcd5f269bc1d7"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_proposal.py",
+                      "sha256":  "8f47eb0616a51bc98a82f7b466822adf0caa5ebdc25fd0870d0349cc831f896e"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_publish.py",
+                      "sha256":  "6cca8918b9b84a90c6d719579222f3a1dd06d5efa9f59520edc74988d9a85b32"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_sequence_order_evaluator.py",
+                      "sha256":  "f1c5f0bfa818b18ed63f69f892081f8c30031408942fa14f635a6054c491d7b0"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_sequence_order_metrics.py",
+                      "sha256":  "41a9923f9fda7a53102fb80eeb59db2e674d4052b6cc60c922622a615bc56a6e"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_source_and_mineru.py",
+                      "sha256":  "0e170967d81f16d17d886e0b81997806bd2aee0560d88fa5af7bdf1668750982"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_target_integration.py",
+                      "sha256":  "8241fe79776a5e0bf89729a63f2a5ff45efed59338a496a1003dffa3d76e1350"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_workflow.py",
+                      "sha256":  "c66f9e9aeafc9880f874ddae23af2ec7b1ff390666a2ed975533c36c6e6f0374"
+                  },
+                  {
+                      "path":  "tests/figure_pipeline/test_workflow_cli.py",
+                      "sha256":  "2788964d9d21d99c601c3b973902faeb2af95a55a3b9c9e4f41027b55fd46563"
+                  },
+                  {
+                      "path":  "tests/test_mineru_ppocr_factory.py",
+                      "sha256":  "51a1a44d05507f25ce82771e94aaac5bd7fef80591704cf798812d3e2ae90dba"
+                  },
+                  {
+                      "path":  "uv.lock",
+                      "sha256":  "f79416a3283809db8de9fc1f2ff5f9b38afd68feccbeab6fb1ee228f315388ad"
+                  }
+              ],
+    "verification":  {
+                         "full_non_gpu_pytest":  "525 passed, 1 skipped, 1 deselected",
+                         "figure_pytest":  "230 passed, 1 skipped",
+                         "ocr_focused_pytest":  "50 passed",
+                         "qdrant_ingest_pytest":  "7 passed",
+                         "ruff":  "passed",
+                         "cli_help":  "passed",
+                         "uv_lock_check":  "passed",
+                         "wheel_build":  "passed: ocr_pipeline and figure_pipeline included",
+                         "diff_check":  "passed",
+                         "surya_optional_runtime":  "surya-ocr 0.22.1 installed --no-deps",
+                         "gpu_ocr":  "not run by design"
+                     }
+}

@@ -1,11 +1,21 @@
 # Task Plan: PDF Scaner — content-first OCR → 可編輯 TeX → 可選編譯
 
+## Current engine status (2026-08-03)
+
+- Primary Stage2: PaddleOCR-VL.
+- Explicit local fallback/formula engine: Qwen3-VL 4-bit via `--text-engine vlm`.
+- Stage3: deterministic `sanitize`; no second VLM inference.
+- `structured_ocr.enabled: false`; no external Instructor/API calls.
+- Runtime paths remain root; management folders contain only classified helpers,
+  documentation, experiments, and analysis artifacts.
+- Verification note: an initial PowerShell 5.1 bulk path rewrite exposed array unrolling;
+  affected documents were restored/normalized before tests, and no runtime file was left corrupted.
 ## Goal
 PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--check-compile` PDF；教師 ≤10 分鐘手改後可 reuse。
 
 ## Current debugging — 2026-07-29
 
-- [x] 對照 `error.txt`、跨年 `summary.json`、affected pages 的 RapidOCR lines。
+- [x] 對照 `3.分析結果/error.txt`、跨年 `summary.json`、affected pages 的 RapidOCR lines。
 - [x] 輸出 14 張缺題頁 overlay 到 `output/missing_question_overlays/`。
 - [x] TDD RED：頁首 orphan、false qid jump、graph incomplete、literal currency 共 4 個預期失敗。
 - [x] 最小修復 regioner 與 `MCQ_ROUTER_PROMPT`。
@@ -34,7 +44,7 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 ## Current Phase
 **DSE Paper2 MCQ** — Stage2 jsonl ABCD 45/45; Stage3 sanitize; **PageIR question-block merge → quality pass** on 2015p2.mcq.
 - Next: optional full pipeline re-run to confirm end-to-end; or teacher edit / compile check.
-- Spec/plan: `docs/superpowers/specs|plans/2026-07-26-dse-paper2-mcq-region*`
+- Spec/plan: `2_生產線/_history/specs|plans/2026-07-26-dse-paper2-mcq-region*`
 - Layout: `data/pdf_pages/2015p2/layout.json` (qids 1–45)
 
 ### Grill locks (2026-07-26, confirmed)
@@ -56,7 +66,7 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 
 ## Routing (locked)
 - Always: planning-with-files (`task_plan.md` / `findings.md` / `progress.md`)
-- Domain table: `.cursor/rules/tool-routing.mdc` (Skill + MCP); handbooks `docs/SKILL_HANDBOOK.md`, `docs/MCP_HANDBOOK.md`
+- Domain table: `.cursor/rules/tool-routing.mdc` (Skill + MCP); handbooks `2_生產線/_handbooks/SKILL_HANDBOOK.md`, `2_生產線/_handbooks/MCP_HANDBOOK.md`
 
 ## Hardware / model
 
@@ -64,14 +74,14 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 |------|----------|
 | GPU | RTX 4070 Super **12GB** |
 | Python | **3.12** (`.python-version`; main `.venv` via uv). Do not use 3.14 for this repo. |
-| Default VLM | **Qwen3-VL-8B-Instruct 4bit** (was Qwen2.5-VL-7B) |
-| **Trunk stack** | **MinerU layout + Qwen text + Qwen formula** (locked 2026-07-24) |
+| Primary Stage2 text | **PaddleOCR-VL**; local Qwen3-VL-8B-Instruct 4bit is explicit fallback/formula engine |
+| **Trunk stack** | **MinerU layout + PaddleOCR-VL text + Qwen formula/fallback** |
 | Formula knives | got / unimernet opt-in only |
 | Decode | **greedy only** (`do_sample=False`) — sampling → CUDA multinomial assert; pass `eos_token_id`/`pad_token_id`; scrub model `generation_config` sampling flags |
 | Token budgets | Stage3 polish **2048**; Stage2 route **1024** (`max_new_tokens_route`) |
 | Surya v2 | Optional fallback；Docker cold ~221s — not trunk；if used, `release()` must stop `surya-vllm-*` |
 | MinerU runtime | `uv sync` (default-groups includes `mineru`); transformers pinned `<5` |
-| Order | Layout (MinerU) → Stage2/3 Qwen → content-first finalize → optional compile |
+| Order | DSE layout → Stage2 PaddleOCR-VL (or explicit Qwen fallback) → deterministic sanitize → content-first finalize |
 
 ## Phases
 
@@ -133,7 +143,7 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [x] `load_segments` maps `crop_relpath` → `crop_path`
 - [x] `ingest_job` payload includes `crop_path` only when present
 - [x] TDD RED confirmed (2 failed), GREEN (2 passed)
-- [x] Report: `.superpowers/sdd/task-5-report.md`
+- [x] Report: `3.分析結果/_reports/sdd/task-5-report.md`
 - **Status:** complete; no commit requested
 
 ### Task 6 (plan): Batch CLI `ocr_pipeline.batch_export` — complete
@@ -141,14 +151,14 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 - [x] Monkeypatchable module-level `publish` / `ingest_job` / `stage_job_dir`
 - [x] Preflight writable jobs + writer key; continue unless `--fail-fast`
 - [x] TDD RED → GREEN; focused related suite 15 passed
-- [x] Report: `.superpowers/sdd/task-6-report.md`
+- [x] Report: `3.分析結果/_reports/sdd/task-6-report.md`
 - **Status:** complete; no commit requested
 
 ### Task 7 (plan): Planning docs + full regression — complete
 - [x] Full suite `uv run pytest -q` → **144 passed**, 1 third-party deprecation warning
 - [x] Updated `task_plan.md` / `findings.md` / `progress.md` for figure+batch contract
 - [x] Manual GPU OCR smoke **not** run (deferred to user)
-- [x] Report: `.superpowers/sdd/task-7-report.md`
+- [x] Report: `3.分析結果/_reports/sdd/task-7-report.md`
 - **Status:** complete; no commit requested
 
 ### Task 6: PP-OCR Traditional Chinese text engine — in progress
@@ -176,8 +186,8 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
   - [x] GPU smoke limit-1 (2026-07-23): total=39.228s → `output/123.mineru-ppocr.tex` (dedicated `.venv-mineru312`, transformers 4.57)
 
 ### Task 10: P-ocr branch comparison scorecard — complete
-- [x] Scorecard: `docs/superpowers/evals/p-ocr-branch-scorecard.md`
-- [x] References: spec `docs/superpowers/specs/2026-07-23-ocr-engine-adapters-design.md`; plan `docs/superpowers/plans/2026-07-23-ocr-engine-adapters.md`
+- [x] Scorecard: `3.分析結果/_reports/p-ocr-branch-scorecard.md`
+- [x] References: spec `2_生產線/_history/specs/2026-07-23-ocr-engine-adapters-design.md`; plan `2_生產線/_history/plans/2026-07-23-ocr-engine-adapters.md`
 - [x] Comparison branches: `qwen-vl`, `got-ppocr`, `mineru-ppocr`; score formula edits, prose editing time, and compile only (timings logged only)
 
 | Error | Resolution |
@@ -279,4 +289,4 @@ PDF → content-first 草稿（`.tex` + `.txt` + `.pageir.json`）→ 可選 `--
 
 ### Shared understanding (confirmed 2026-07-26)
 DSE **MATH CP Paper2** path: on **B**, light OCR + rules (題號 open, **A–D** confirm) cut **one ROI per MCQ** (figure inside same box) → `layout.json`; on **A**, VLM per question (`--reuse-layout`). Bypass MinerU shreds. v1 single-column; dual-column/profile for other subjects later. v1 success = **boxes right**; quality gate / formal ingest = next stage. N-up/dual-version out of scope.
-Spec: `docs/superpowers/specs/2026-07-26-dse-paper2-mcq-region-design.md`
+Spec: `2_生產線/_history/specs/2026-07-26-dse-paper2-mcq-region-design.md`

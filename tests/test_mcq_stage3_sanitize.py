@@ -28,6 +28,8 @@ def test_mcq_router_prompt_forbids_solving_requires_options():
     p = MCQ_ROUTER_PROMPT
     assert "不要解題" in p or "禁止解題" in p
     assert "A" in p and "D" in p
+    assert "不能是 string" in p
+    assert "content 不能空" in p
     # Qwen3-VL: keep short (cookbook-style); do not dump full LATEX_MATH_RULES sheet
     assert "分數：禁止" not in p
     assert len(p) < 500
@@ -83,6 +85,52 @@ def test_polish_mcq_single_question_page_skips_vlm():
     txt, tex, warn = FinalPolisher(BoomVlm(), mcq_stage3="sanitize").polish_mcq(draft)
     assert "5." in txt and "A. 1" in txt
     assert any("sanitize" in w for w in warn)
+
+
+def test_paddle_mcq_stage3_renders_exactly_five_lines_without_vlm():
+    class BoomVlm:
+        def generate(self, *a, **k):
+            raise AssertionError("Paddle MCQ Stage3 must not call VLM")
+
+    draft = (
+        "3. 若 p 及 q 均為常數，則 $p=$\n\n"
+        "A. $-4$\n\nB. $-2$\n\nC. $6$\n\nD. $10$"
+    )
+
+    txt, tex, warn = FinalPolisher(
+        BoomVlm(), mcq_stage3="paddle_sanitize"
+    ).polish_mcq(draft)
+
+    assert txt.splitlines() == [
+        "3. 若 p 及 q 均為常數，則 $p=$",
+        "A. $-4$",
+        "B. $-2$",
+        "C. $6$",
+        "D. $10$",
+    ]
+    assert "3." in FinalPolisher.extract_tex_body(tex)
+    assert any("paddle sanitize" in item for item in warn)
+
+
+def test_only_paddle_stage3_converts_simplified_chinese_to_hong_kong_traditional():
+    class BoomVlm:
+        def generate(self, *a, **k):
+            raise AssertionError("Deterministic Stage3 must not call VLM")
+
+    draft = (
+        "30. 考虑以下整数，设 p 分别为平均值。\n"
+        "A. 只有 I\nB. 只有 II\nC. 只有 III\nD. 以上皆是"
+    )
+
+    paddle_txt, _, _ = FinalPolisher(
+        BoomVlm(), mcq_stage3="paddle_sanitize"
+    ).polish_mcq(draft)
+    qwen_txt, _, _ = FinalPolisher(
+        BoomVlm(), mcq_stage3="sanitize"
+    ).polish_mcq(draft)
+
+    assert paddle_txt.splitlines()[0] == "30. 考慮以下整數，設 p 分別為平均值。"
+    assert "考虑" in qwen_txt
 
 
 def test_mcq_vlm_mode_uses_mcq_prompt():
